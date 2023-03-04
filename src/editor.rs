@@ -14,13 +14,20 @@ pub fn editor(window: &mut Window) -> Result<()> {
     queue!(window.renderer, cursor::MoveTo(0,0))?;
 
     for i in 0..terminal_y-1 {
-        if i >= file.len() as u16 {
+        if (i + window.cursor.offset_y) >= file.len() as u16 {
             write!(window.renderer, "\r\n")?;
             queue!(window.renderer, terminal::Clear(terminal::ClearType::UntilNewLine))?;
         }
         else {
-            let mut line = &mut file[i as usize];
+            let mut line = &mut file[i as usize + window.cursor.offset_y as usize];
+
+            if window.cursor.offset_x > line.len() as u16 {
+                window.cursor.offset_x = line.len() as u16;
+            }
+
+            // let mut line  = line[window.cursor.offset_x as usize..].to_string();
             line.truncate(terminal_x as usize);
+
             write!(window.renderer, "{}\r\n", line)?;
             queue!(window.renderer, terminal::Clear(terminal::ClearType::UntilNewLine))?;
         }

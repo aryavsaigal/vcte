@@ -5,7 +5,7 @@ use crossterm::{
     style::{Color, Print, ResetColor, SetBackgroundColor, SetForegroundColor},
     cursor,
     Result,
-    queue,
+    queue, execute,
 };
 
 use crate::cursor::Cursor;
@@ -47,6 +47,8 @@ impl Window {
                 if commands.len() > 1 && Path::new(commands[1]).exists(){
                     self.open_files.push(commands[1].to_string());
                     self.tab = Tab::Editor;
+                    self.cursor.move_to(0, 0, &mut self.renderer)?;
+                    self.cursor.clear_offset();
                 } else {
                     self.status_message.error = "No file specified".to_string();
                     self.status_message.mode = status_message::Mode::Error;
@@ -114,7 +116,7 @@ impl Window {
     pub fn ui(&mut self) -> Result<()> {
         loop {
             self.parse_input()?;
-
+            execute!(self.renderer, cursor::Hide)?;
             match self.tab {
                 Tab::Home => {
                     home(self)?;
@@ -138,6 +140,7 @@ impl Window {
                     queue!(self.renderer, cursor::MoveTo(self.cursor.x, self.cursor.y))?;
                 }
             } 
+            queue!(self.renderer, cursor::Show)?;
             self.renderer.flush()?;
         }
     }
