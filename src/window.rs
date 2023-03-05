@@ -125,6 +125,7 @@ impl Window {
                     editor(self)?;
                 }
             }
+            queue!(self.renderer, terminal::Clear(terminal::ClearType::UntilNewLine))?;
             let (terminal_x, terminal_y) = terminal::size()?;
             match self.status_message.mode {
                 status_message::Mode::Enabled => {
