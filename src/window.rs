@@ -11,11 +11,29 @@ use crossterm::{
 use crate::cursor::Cursor;
 use crate::status_message::{self, StatusMessage};
 use crate::home::home;
-use crate::editor::editor;
+use crate::editor;
 
 pub enum Tab {
     Home,
     Editor,
+}
+
+pub struct InsertedChar {
+    pub character: char,
+    pub x: u16,
+    pub y: u16,
+    pub backspace: bool,
+}
+
+impl InsertedChar {
+    fn new(character: char, x: u16, y: u16, backspace: bool) -> Self {
+        Self {
+            character,
+            x,
+            y,
+            backspace,
+        }
+    }
 }
 
 pub struct Window {
@@ -24,6 +42,10 @@ pub struct Window {
     pub tab: Tab,
     pub status_message: StatusMessage,
     pub open_files: Vec<String>,
+    pub editor_mode: editor::Mode,
+    pub inserted_char: Option<InsertedChar>,
+    pub open_file: Vec<String>,
+
 }
 
 impl Window {
@@ -34,26 +56,41 @@ impl Window {
             tab: Tab::Home,
             status_message: StatusMessage::new(),
             open_files: Vec::new(),
+            editor_mode: editor::Mode::View,
+            inserted_char: None,
+            open_file: Vec::new(),
         }
     }
 
     pub fn parse_command(&mut self) -> Result<()> {
         let commands: Vec<&str> = self.status_message.command.split_whitespace().collect();
         match commands[0] {
-            "q" => {
+            "q" | "quit" => {
                return Err(Error::new(ErrorKind::Other, "Quit").into());
             },
-            "o" => {
+            "o" | "open" => {
                 if commands.len() > 1 && Path::new(commands[1]).exists(){
                     self.open_files.push(commands[1].to_string());
                     self.tab = Tab::Editor;
                     self.cursor.move_to(0, 0, &mut self.renderer)?;
+                    self.open_file = editor::open_file(&Path::new(&self.open_files[0]));
                     self.cursor.clear_offset();
                 } else {
                     self.status_message.error = "No file specified".to_string();
                     self.status_message.mode = status_message::Mode::Error;
                 }
             },
+            "s" | "save" => {
+                if let Tab::Editor = self.tab {
+                    editor::save_file(&Path::new(&self.open_files[0]), &self.open_file)?;
+                    self.status_message.success = "File saved".to_string();
+                    self.status_message.mode = status_message::Mode::Success;
+                } 
+                else {
+                    self.status_message.error = "No file open".to_string();
+                    self.status_message.mode = status_message::Mode::Error;
+                }
+            }
             _ => {
                 self.status_message.error = format!("Not a command: {}", self.status_message.command);
                 self.status_message.mode = status_message::Mode::Error;
@@ -92,15 +129,33 @@ impl Window {
                                     _ => {}
                                 }
                             }
+                            else if let editor::Mode::Insert = self.editor_mode {
+                                match key.code {
+                                    KeyCode::Esc => {
+                                        self.editor_mode = editor::Mode::View;
+                                    },
+                                    KeyCode::Char(c) => {
+                                        self.inserted_char = Some(InsertedChar::new(c, self.cursor.x, self.cursor.y, false));
+                                    },
+                                    KeyCode::Backspace => {
+                                        self.inserted_char = Some(InsertedChar::new(' ', self.cursor.x, self.cursor.y, true));
+                                    },
+                                    _ => {}
+                                }
+                            }
                             else {
                                 match key.code {
                                     KeyCode::Char(':') => {
                                         self.status_message.mode = status_message::Mode::Enabled;
                                     },
-                                    direction @ (KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right | KeyCode::Char('w') | KeyCode::Char('a') | KeyCode::Char('s') | KeyCode::Char('d')) => {
-                                        self.cursor.move_cursor(direction, &mut self.renderer)?;
+                                    KeyCode::Char('i') => {
+                                        if let editor::Mode::View = self.editor_mode {
+                                            self.editor_mode = editor::Mode::Insert;
+                                        }
                                     },
-                                    _ => {}
+                                    _ => {
+                                        self.cursor.move_cursor(key.code, &mut self.renderer)?;
+                                    }
                                 }
                             }
                         },
@@ -122,7 +177,7 @@ impl Window {
                     home(self)?;
                 },
                 Tab::Editor => {
-                    editor(self)?;
+                    editor::editor(self)?;
                 }
             }
             queue!(self.renderer, terminal::Clear(terminal::ClearType::UntilNewLine))?;
@@ -137,7 +192,21 @@ impl Window {
                     queue!(self.renderer, SetForegroundColor(Color::Red) , Print(format!("Error: {}\r", self.status_message.error).as_str()), ResetColor)?;
                     queue!(self.renderer, cursor::MoveTo(self.cursor.x, self.cursor.y))?;
                 },
+                status_message::Mode::Success => {
+                    queue!(self.renderer, SetForegroundColor(Color::Green) , Print(format!("{}\r", self.status_message.success).as_str()), ResetColor)?;
+                    queue!(self.renderer, cursor::MoveTo(self.cursor.x, self.cursor.y))?;
+                },
                 _ => {
+                    if let Tab::Editor = self.tab {
+                        if let editor::Mode::Insert = self.editor_mode {
+                            let msg = String::from("--insert mode--");
+                            queue!(self.renderer, Print(format!("{}", " ".repeat(terminal_x as usize - msg.len()))), SetForegroundColor(Color::Red), Print(format!("{}", msg)), ResetColor)?;
+                        }
+                        else if let editor::Mode::View = self.editor_mode {
+                            let msg = String::from("--view mode--");
+                            queue!(self.renderer, Print(format!("{}", " ".repeat(terminal_x as usize - msg.len()))), SetForegroundColor(Color::Green), Print(format!("{}", msg)), ResetColor)?;
+                        }
+                    }
                     queue!(self.renderer, cursor::MoveTo(self.cursor.x, self.cursor.y))?;
                 }
             } 

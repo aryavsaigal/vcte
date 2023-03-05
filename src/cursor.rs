@@ -56,7 +56,7 @@ impl Cursor {
                     }
                 },
                 KeyCode::Down | KeyCode::Char('s')=> {
-                    if self.y == terminal_y-1 {
+                    if self.y == terminal_y-2 {
                         self.offset_y += 1;
                     } 
                     else {
