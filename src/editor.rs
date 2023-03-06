@@ -21,7 +21,7 @@ pub fn editor(window: &mut Window) -> Result<()> {
     let longest_string = file.content.iter().max_by_key(|x| x.len()).unwrap_or(&String::new()).to_string();
     if let Some(inserted_char) = &window.inserted_char {
         let x = inserted_char.x as usize + file.offset_x as usize;
-        let y = inserted_char.y as usize + file.offset_y as usize;
+        let y = inserted_char.y as usize + file.offset_y as usize - 2; // -2 because 2 lines on top
         if y >= file.content.len() {
             for _ in 0..((y+1)-file.content.len()) {
                 file.content.push(String::new());
