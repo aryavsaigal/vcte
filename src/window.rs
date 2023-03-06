@@ -133,12 +133,17 @@ impl Window {
                                 match key.code {
                                     KeyCode::Esc => {
                                         self.editor_mode = editor::Mode::View;
+                                        queue!(self.renderer, cursor::SetCursorStyle::DefaultUserShape)?;
                                     },
                                     KeyCode::Char(c) => {
                                         self.inserted_char = Some(InsertedChar::new(c, self.cursor.x, self.cursor.y, false));
                                     },
                                     KeyCode::Backspace => {
                                         self.inserted_char = Some(InsertedChar::new(' ', self.cursor.x, self.cursor.y, true));
+                                    },
+                                    direction @ (KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right) => {
+                                        self.cursor.move_cursor(direction, &mut self.renderer)?;
+                                        self.status_message.mode = status_message::Mode::Disabled;
                                     },
                                     _ => {}
                                 }
@@ -151,10 +156,12 @@ impl Window {
                                     KeyCode::Char('i') => {
                                         if let editor::Mode::View = self.editor_mode {
                                             self.editor_mode = editor::Mode::Insert;
+                                            queue!(self.renderer, cursor::SetCursorStyle::BlinkingBar)?;
                                         }
                                     },
                                     _ => {
                                         self.cursor.move_cursor(key.code, &mut self.renderer)?;
+                                        self.status_message.mode = status_message::Mode::Disabled;
                                     }
                                 }
                             }
@@ -184,16 +191,16 @@ impl Window {
             let (terminal_x, terminal_y) = terminal::size()?;
             match self.status_message.mode {
                 status_message::Mode::Enabled => {
-                    write!(self.renderer, ":{}\r", self.status_message.command)?;
+                    write!(self.renderer, ":{}", self.status_message.command)?;
                     queue!(self.renderer, cursor::MoveTo(1+self.status_message.command.len() as u16,terminal_y-1))?;
                     self.cursor.movable = false;
                 },
                 status_message::Mode::Error => {
-                    queue!(self.renderer, SetForegroundColor(Color::Red) , Print(format!("Error: {}\r", self.status_message.error).as_str()), ResetColor)?;
+                    queue!(self.renderer, SetForegroundColor(Color::Red) , Print(format!("Error: {}", self.status_message.error).as_str()), ResetColor)?;
                     queue!(self.renderer, cursor::MoveTo(self.cursor.x, self.cursor.y))?;
                 },
                 status_message::Mode::Success => {
-                    queue!(self.renderer, SetForegroundColor(Color::Green) , Print(format!("{}\r", self.status_message.success).as_str()), ResetColor)?;
+                    queue!(self.renderer, SetForegroundColor(Color::Green) , Print(format!("{}", self.status_message.success).as_str()), ResetColor)?;
                     queue!(self.renderer, cursor::MoveTo(self.cursor.x, self.cursor.y))?;
                 },
                 _ => {

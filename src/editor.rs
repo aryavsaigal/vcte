@@ -18,28 +18,27 @@ pub fn editor(window: &mut Window) -> Result<()> {
     let (terminal_x, terminal_y) = terminal::size()?;
     
     let longest_string = window.open_file.iter().max_by_key(|x| x.len()).unwrap_or(&String::new()).to_string();
-
     if let Some(inserted_char) = &window.inserted_char {
-        if inserted_char.backspace {
-            let x = inserted_char.x as usize + window.cursor.offset_x as usize;
-            let y = inserted_char.y as usize + window.cursor.offset_y as usize;
-            let line_len = window.open_file[y].len();
-            if x >= line_len {
-                window.open_file[y].push_str(" ".repeat(x - line_len).as_str());
+        let x = inserted_char.x as usize + window.cursor.offset_x as usize;
+        let y = inserted_char.y as usize + window.cursor.offset_y as usize;
+        if y >= window.open_file.len() {
+            for _ in 0..((y+1)-window.open_file.len()) {
+                window.open_file.push(String::new());
             }
-    
+        }
+
+        let line_len = window.open_file[y].len();
+
+        if x >= line_len {
+            window.open_file[y].push_str(" ".repeat(x - line_len).as_str());
+        }
+
+        if inserted_char.backspace {
             window.open_file[y].remove(x-1);
             window.inserted_char = None;
             window.cursor.move_cursor(KeyCode::Left, &mut window.renderer)?;
         }
         else {
-            let x = inserted_char.x as usize + window.cursor.offset_x as usize;
-            let y = inserted_char.y as usize + window.cursor.offset_y as usize;
-            let line_len = window.open_file[y].len();
-            if x > line_len {
-                window.open_file[y].push_str(" ".repeat(x - line_len).as_str());
-            }
-    
             window.open_file[y].insert(x, inserted_char.character);
             window.inserted_char = None;
             window.cursor.move_cursor(KeyCode::Right, &mut window.renderer)?;
@@ -54,8 +53,8 @@ pub fn editor(window: &mut Window) -> Result<()> {
             write!(window.renderer, "\r\n")?;
         }
         else {
-            if (longest_string[window.cursor.offset_x as usize..].len()+1) - terminal_x as usize == 0 {
-                window.cursor.offset_x -= 1;
+            if (longest_string[window.cursor.offset_x as usize..].len()+2).saturating_sub(terminal_x as usize) == 0 {
+                window.cursor.offset_x = window.cursor.offset_x.saturating_sub(1);
             }
             let mut line = &mut window.open_file[i as usize + window.cursor.offset_y as usize];
             if window.cursor.offset_x >= line.len() as u16 {
