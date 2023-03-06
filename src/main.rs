@@ -5,13 +5,14 @@ pub(crate) mod home;
 pub(crate) mod editor;
 
 use crossterm::{
-    terminal::{self, disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen}, 
+    terminal::{ disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen}, 
     event::{EnableMouseCapture, DisableMouseCapture},
-    Result, execute, cursor::{SavePosition, RestorePosition}
+    Result, execute,
 };
 
-use std::io::stdout;
-use std::fs::File;
+use std::io::{stdout, Write};
+use std::fs::{self, File};
+use std::path::Path;
 use window::Window;
 
 #[macro_use] extern crate log;
@@ -27,8 +28,20 @@ impl Drop for DisableRawMode {
     }
 }
 
+fn create_config_file() -> Result<()> {
+    let path = Path::new("~/.vcte/config.toml");
+    if !path.exists() {
+        let prefix = path.parent().unwrap_or(Path::new("~/.vcte/"));
+        fs::create_dir_all(prefix)?;
+        let mut file = File::create(path)?;
+        file.write_all(b"[general]")?;
+    }
+    Ok(())
+}
+
 fn main() -> Result<()> {
     enable_raw_mode()?;
+    create_config_file()?;
     let _ = WriteLogger::init(LevelFilter::Debug, Config::default(), File::create("debug.log").unwrap());
     let _disable_raw_mode = DisableRawMode;
     let mut window = Window::new();

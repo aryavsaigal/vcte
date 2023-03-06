@@ -37,7 +37,7 @@ impl Cursor {
             let (terminal_x, terminal_y) = terminal::size()?;
             match direction {
                 KeyCode::Up | KeyCode::Char('w') => {
-                    if file.y == 2 {
+                    if file.y == 2 && file.path != "[for init]" {
                         file.offset_y = file.offset_y.saturating_sub(1);
                     } 
                     else {
@@ -45,7 +45,7 @@ impl Cursor {
                     }
                 },
                 KeyCode::Down | KeyCode::Char('s')=> {
-                    if file.y == terminal_y-2 {
+                    if file.y == terminal_y-3 {
                         file.offset_y += 1;
                     } 
                     else {

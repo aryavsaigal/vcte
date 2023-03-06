@@ -13,6 +13,8 @@ use crate::status_message::{self, StatusMessage};
 use crate::home::home;
 use crate::editor;
 
+extern crate strip_ansi_escapes;
+
 pub enum Tab {
     Home,
     Editor,
@@ -263,60 +265,36 @@ impl Window {
         }
     }
     pub fn render_status_message(&mut self) -> Result<()> {
-        queue!(self.renderer, terminal::Clear(terminal::ClearType::UntilNewLine))?;
         let current_file = &self.open_files[self.current_file_index];
         let (terminal_x, terminal_y) = terminal::size()?;
-        let mut padding = terminal_x;
         let (x,y) = if let status_message::Mode::Enabled = self.status_message.mode { (1+self.status_message.command.len() as u16, terminal_y-1) } else { (current_file.x, current_file.y) };
-        let beginning = match self.status_message.mode {
+
+        let top = match self.tab {
+            Tab::Home => String::from("Home"),
+            Tab::Editor => format!("{}:{} {}", current_file.y+current_file.offset_y-1, current_file.x+current_file.offset_x+1, match self.editor_mode {
+                editor::Mode::Insert => String::from("--insert mode--") .red().to_string(),
+                editor::Mode::View => String::from("--view mode--") .green().to_string(),
+                _ => String::new()
+            }),
+            _ => String::new()
+        };
+
+        let bottom = match self.status_message.mode {
             status_message::Mode::Enabled => {
                 self.cursor.movable = false;
-                let m = format!(":{}", self.status_message.command);
-                padding = padding.saturating_sub(m.len() as u16);
-                m
+                format!(":{}", self.status_message.command)
             },
-            status_message::Mode::Error => {
-                let m = format!("Error: {}", self.status_message.error);
-                padding = padding.saturating_sub(m.len() as u16);
-                m.red().to_string()
-            },
-            status_message::Mode::Success => {
-                let m = format!("{}", self.status_message.success);
-                padding = padding.saturating_sub(m.len() as u16);
-                m.green().to_string()
-            },
+            status_message::Mode::Error => format!("Error: {}", self.status_message.error) .red().to_string(),
+            status_message::Mode::Success => format!("{}", self.status_message.success).green().to_string(),
             _ => String::new()
         };
-        let end = match self.tab {
-            Tab::Home => {
-                let m = String::from("Home");
-                padding = padding.saturating_sub(m.len() as u16);
-                m
-            },
-            Tab::Editor => { 
-                let m = format!("{}:{}", current_file.y+current_file.offset_y-2, current_file.x+current_file.offset_x);
-                padding = padding.saturating_sub(m.len() as u16 + 1); 
-                let n = match self.editor_mode {
-                    editor::Mode::Insert => {
-                        let x = String::from("--insert mode--");
-                        padding = padding.saturating_sub(x.len() as u16);
-                        x.red().to_string()
-                    },
-                    editor::Mode::View => {
-                        let x = String::from("--view mode--");
-                        padding = padding.saturating_sub(x.len() as u16);
-                        x.green().to_string()
-                    },
-                    _ => String::new()
-                };
-                format!("{} {}", m, n)
-         },
-            _ => String::new()
-        };
-        let mut status_message = format!("{}{}{}", beginning, " ".repeat(padding.into()), end);
-        // if status_message.len() > terminal_x as usize {
-        //     status_message.truncate(terminal_x as usize);
-        // }
+
+        let status_bar = format!("{}{}\r\n", " ".repeat(terminal_x as usize-strip_ansi_escapes::strip(&top).unwrap().len()), top);
+        let status_message = format!("{}", bottom);
+
+        queue!(self.renderer, terminal::Clear(terminal::ClearType::CurrentLine))?;
+        queue!(self.renderer, Print(status_bar))?;
+        queue!(self.renderer, terminal::Clear(terminal::ClearType::CurrentLine))?;
         queue!(self.renderer, Print(status_message))?;
         queue!(self.renderer, cursor::MoveTo(x,y))?;
         Ok(())

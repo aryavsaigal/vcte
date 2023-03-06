@@ -51,7 +51,7 @@ pub fn editor(window: &mut Window) -> Result<()> {
     write!(window.renderer, "{}\r\n", open_files_tab.iter().enumerate().map(|(i, x)| {
         let path = Path::new(&x.path).file_name().unwrap().to_str().unwrap();
         if i == window.current_file_index {
-            format!("{} ", path).bold().to_string()
+            format!("{} ", path).bold().cyan().to_string()
         }
         else {
             format!("{} ", path).to_string()
@@ -61,7 +61,7 @@ pub fn editor(window: &mut Window) -> Result<()> {
     write!(window.renderer, "{}\r\n", "-".repeat(terminal_x as usize))?;
     
 
-    for i in 0..terminal_y-3 { // -3 because im rendering like 2 lines on top and 1 line on bottom
+    for i in 0..terminal_y-4 { // -3 because im rendering like 2 lines on top and 1 line on bottom
         if (i + file.offset_y) >= file.content.len() as u16 {
             queue!(window.renderer, terminal::Clear(terminal::ClearType::CurrentLine))?;
             write!(window.renderer, "\r\n")?;

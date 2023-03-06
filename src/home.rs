@@ -14,7 +14,7 @@ pub fn home(window: &mut Window) -> Result<()> {
     write!(window.renderer, "\n")?;
     queue!(window.renderer, terminal::Clear(terminal::ClearType::UntilNewLine))?;
 
-    for i in 0..terminal_y-2 {
+    for i in 0..terminal_y-3 {
         write!(window.renderer, "~")?;
 
         if i == terminal_y / 3 {
