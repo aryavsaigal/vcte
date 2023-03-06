@@ -11,28 +11,24 @@ use crossterm::{
 use crate::window::File;
 
 pub struct Cursor {
-    pub x: u16,
-    pub y: u16,
     pub movable: bool
 }
 
 impl Cursor {
     pub fn new() -> Self {
         Self {
-            x: 0,
-            y: 0,
             movable: true
         }
     }
 
-    pub fn update_coords(&mut self, coords: (u16, u16)) {
-        self.x = coords.0;
-        self.y = coords.1;
+    pub fn update_coords(&mut self, coords: (u16, u16), file: &mut File) {
+        file.x = coords.0;
+        file.y = coords.1;
     }
 
-    pub fn move_to(&mut self, x: u16, y: u16, renderer: &mut Stdout) -> Result<()> {
+    pub fn move_to(&mut self, x: u16, y: u16, renderer: &mut Stdout, file: &mut File) -> Result<()> {
         queue!(renderer, cursor::MoveTo(x, y))?;
-        self.update_coords((x, y));
+        self.update_coords((x, y), file);
         Ok(())
     }
 
@@ -41,7 +37,7 @@ impl Cursor {
             let (terminal_x, terminal_y) = terminal::size()?;
             match direction {
                 KeyCode::Up | KeyCode::Char('w') => {
-                    if self.y == 2 {
+                    if file.y == 2 {
                         file.offset_y = file.offset_y.saturating_sub(1);
                     } 
                     else {
@@ -49,7 +45,7 @@ impl Cursor {
                     }
                 },
                 KeyCode::Down | KeyCode::Char('s')=> {
-                    if self.y == terminal_y-2 {
+                    if file.y == terminal_y-2 {
                         file.offset_y += 1;
                     } 
                     else {
@@ -57,7 +53,7 @@ impl Cursor {
                     }
                 },
                 KeyCode::Left | KeyCode::Char('a') => {
-                    if self.x == 0 {
+                    if file.x == 0 {
                         file.offset_x = file.offset_x.saturating_sub(1)
                     } 
                     else {
@@ -65,7 +61,7 @@ impl Cursor {
                     }
                 },
                 KeyCode::Right | KeyCode::Char('d') => {
-                    if self.x == terminal_x-1 {
+                    if file.x == terminal_x-1 {
                         file.offset_x += 1;
                     } 
                     else {
@@ -74,7 +70,7 @@ impl Cursor {
                 },
                 _ => {}
             }
-            self.update_coords(cursor::position()?);
+            self.update_coords(cursor::position()?, file);
         }
         Ok(())
     }

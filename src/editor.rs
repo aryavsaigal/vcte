@@ -3,7 +3,7 @@ use crossterm::{
     terminal,
     queue,
     Result,
-    style::{Stylize, StyledContent},
+    style::{Stylize},
     cursor,
     event::KeyCode
 };
@@ -70,7 +70,7 @@ pub fn editor(window: &mut Window) -> Result<()> {
             if (longest_string[file.offset_x as usize..].len()+2).saturating_sub(terminal_x as usize) == 0 {
                 file.offset_x = file.offset_x.saturating_sub(1);
             }
-            let mut line = &mut file.content[i as usize + file.offset_y as usize];
+            let line = &mut file.content[i as usize + file.offset_y as usize];
             if file.offset_x >= line.len() as u16 {
                 line.insert_str(0, " ".repeat((file.offset_x - line.len() as u16) as usize).as_str());
             }
