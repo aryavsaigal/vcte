@@ -8,11 +8,11 @@ use crossterm::{
     terminal
 };
 
+use crate::window::File;
+
 pub struct Cursor {
     pub x: u16,
     pub y: u16,
-    pub offset_x: u16,
-    pub offset_y: u16,
     pub movable: bool
 }
 
@@ -21,8 +21,6 @@ impl Cursor {
         Self {
             x: 0,
             y: 0,
-            offset_x: 0,
-            offset_y: 0,
             movable: true
         }
     }
@@ -38,18 +36,13 @@ impl Cursor {
         Ok(())
     }
 
-    pub fn clear_offset(&mut self) {
-        self.offset_x = 0;
-        self.offset_y = 0;
-    }
-
-    pub fn move_cursor(&mut self, direction: KeyCode, renderer: &mut Stdout) -> Result<()> {
+    pub fn move_cursor(&mut self, direction: KeyCode, renderer: &mut Stdout, file: &mut File) -> Result<()> {
         if self.movable {
             let (terminal_x, terminal_y) = terminal::size()?;
             match direction {
                 KeyCode::Up | KeyCode::Char('w') => {
-                    if self.y == 0 {
-                        self.offset_y = self.offset_y.saturating_sub(1);
+                    if self.y == 2 {
+                        file.offset_y = file.offset_y.saturating_sub(1);
                     } 
                     else {
                         queue!(renderer, cursor::MoveUp(1))?;
@@ -57,7 +50,7 @@ impl Cursor {
                 },
                 KeyCode::Down | KeyCode::Char('s')=> {
                     if self.y == terminal_y-2 {
-                        self.offset_y += 1;
+                        file.offset_y += 1;
                     } 
                     else {
                         queue!(renderer, cursor::MoveDown(1))?;
@@ -65,7 +58,7 @@ impl Cursor {
                 },
                 KeyCode::Left | KeyCode::Char('a') => {
                     if self.x == 0 {
-                        self.offset_x = self.offset_x.saturating_sub(1)
+                        file.offset_x = file.offset_x.saturating_sub(1)
                     } 
                     else {
                         queue!(renderer, cursor::MoveLeft(1))?;
@@ -73,7 +66,7 @@ impl Cursor {
                 },
                 KeyCode::Right | KeyCode::Char('d') => {
                     if self.x == terminal_x-1 {
-                        self.offset_x += 1;
+                        file.offset_x += 1;
                     } 
                     else {
                         queue!(renderer, cursor::MoveRight(1))?;

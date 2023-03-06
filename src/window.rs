@@ -18,6 +18,26 @@ pub enum Tab {
     Editor,
 }
 
+#[derive(Clone)]
+pub struct File {
+    pub content: Vec<String>,
+    pub path: String,
+    pub offset_x: u16,
+    pub offset_y: u16,
+}
+
+impl File {
+    pub fn new(path: &Path) -> Self {
+        let content = editor::open_file(&Path::new(path));
+        Self {
+            content,
+            path: path.to_str().unwrap().to_string(),
+            offset_x: 0,
+            offset_y: 0,
+        }
+    }
+}
+
 pub struct InsertedChar {
     pub character: char,
     pub x: u16,
@@ -41,10 +61,10 @@ pub struct Window {
     pub cursor: Cursor,
     pub tab: Tab,
     pub status_message: StatusMessage,
-    pub open_files: Vec<String>,
+    pub open_files: Vec<File>,
     pub editor_mode: editor::Mode,
     pub inserted_char: Option<InsertedChar>,
-    pub open_file: Vec<String>,
+    pub current_file_index: usize,
 
 }
 
@@ -58,7 +78,7 @@ impl Window {
             open_files: Vec::new(),
             editor_mode: editor::Mode::View,
             inserted_char: None,
-            open_file: Vec::new(),
+            current_file_index: 0,
         }
     }
 
@@ -70,11 +90,10 @@ impl Window {
             },
             "o" | "open" => {
                 if commands.len() > 1 && Path::new(commands[1]).exists(){
-                    self.open_files.push(commands[1].to_string());
+                    self.open_files.push(File::new(&Path::new(commands[1])));
+                    self.current_file_index = self.open_files.len() - 1;
                     self.tab = Tab::Editor;
                     self.cursor.move_to(0, 0, &mut self.renderer)?;
-                    self.open_file = editor::open_file(&Path::new(&self.open_files[0]));
-                    self.cursor.clear_offset();
                 } else {
                     self.status_message.error = "No file specified".to_string();
                     self.status_message.mode = status_message::Mode::Error;
@@ -82,7 +101,7 @@ impl Window {
             },
             "s" | "save" => {
                 if let Tab::Editor = self.tab {
-                    editor::save_file(&Path::new(&self.open_files[0]), &self.open_file)?;
+                    editor::save_file(&self.open_files[self.current_file_index])?;
                     self.status_message.success = "File saved".to_string();
                     self.status_message.mode = status_message::Mode::Success;
                 } 
@@ -129,38 +148,65 @@ impl Window {
                                     _ => {}
                                 }
                             }
-                            else if let editor::Mode::Insert = self.editor_mode {
-                                match key.code {
-                                    KeyCode::Esc => {
-                                        self.editor_mode = editor::Mode::View;
-                                        queue!(self.renderer, cursor::SetCursorStyle::DefaultUserShape)?;
-                                    },
-                                    KeyCode::Char(c) => {
-                                        self.inserted_char = Some(InsertedChar::new(c, self.cursor.x, self.cursor.y, false));
-                                    },
-                                    KeyCode::Backspace => {
-                                        self.inserted_char = Some(InsertedChar::new(' ', self.cursor.x, self.cursor.y, true));
-                                    },
-                                    direction @ (KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right) => {
-                                        self.cursor.move_cursor(direction, &mut self.renderer)?;
-                                        self.status_message.mode = status_message::Mode::Disabled;
-                                    },
-                                    _ => {}
+                            else if let Tab::Editor = self.tab {
+                                if let editor::Mode::Insert = self.editor_mode {
+                                    match key.code {
+                                        KeyCode::Esc => {
+                                            self.editor_mode = editor::Mode::View;
+                                            queue!(self.renderer, cursor::SetCursorStyle::DefaultUserShape)?;
+                                        },
+                                        KeyCode::Char(c) => {
+                                            self.inserted_char = Some(InsertedChar::new(c, self.cursor.x, self.cursor.y, false));
+                                        },
+                                        KeyCode::Backspace => {
+                                            self.inserted_char = Some(InsertedChar::new(' ', self.cursor.x, self.cursor.y, true));
+                                        },
+                                        direction @ (KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right) => {
+                                            self.cursor.move_cursor(direction, &mut self.renderer, &mut self.open_files[self.current_file_index])?;
+                                            self.status_message.mode = status_message::Mode::Disabled;
+                                        },
+                                        _ => {}
+                                    }
                                 }
-                            }
+                                else if let editor::Mode::View = self.editor_mode {
+                                    match key.code {
+                                        KeyCode::Char('i') => {
+                                            self.editor_mode = editor::Mode::Insert;
+                                            queue!(self.renderer, cursor::SetCursorStyle::BlinkingBar)?;
+                                        },
+                                        KeyCode::Char('n') => {
+                                            self.current_file_index = if self.current_file_index == self.open_files.len() - 1 {
+                                                0
+                                            } else {
+                                                self.current_file_index + 1
+                                            };
+                                            self.cursor.move_to(0, 0, &mut self.renderer)?;
+                                        }
+                                        KeyCode::Char('b') => {
+                                            self.current_file_index = if self.current_file_index == 0 {
+                                                self.open_files.len() - 1
+                                            } else {
+                                                self.current_file_index - 1
+                                            };
+                                            self.cursor.move_to(0, 0, &mut self.renderer)?;
+                                        },
+                                        KeyCode::Char(':') => {
+                                            self.status_message.mode = status_message::Mode::Enabled;
+                                        },
+                                        _ => {
+                                            self.cursor.move_cursor(key.code, &mut self.renderer, &mut self.open_files[self.current_file_index])?;
+                                            self.status_message.mode = status_message::Mode::Disabled;
+                                        }
+                                    }
+                                }
+                            } 
                             else {
                                 match key.code {
                                     KeyCode::Char(':') => {
                                         self.status_message.mode = status_message::Mode::Enabled;
                                     },
-                                    KeyCode::Char('i') => {
-                                        if let editor::Mode::View = self.editor_mode {
-                                            self.editor_mode = editor::Mode::Insert;
-                                            queue!(self.renderer, cursor::SetCursorStyle::BlinkingBar)?;
-                                        }
-                                    },
                                     _ => {
-                                        self.cursor.move_cursor(key.code, &mut self.renderer)?;
+                                        self.cursor.move_cursor(key.code, &mut self.renderer, &mut self.open_files[self.current_file_index])?;
                                         self.status_message.mode = status_message::Mode::Disabled;
                                     }
                                 }
@@ -185,6 +231,11 @@ impl Window {
                 },
                 Tab::Editor => {
                     editor::editor(self)?;
+                }
+            }
+            if let Tab::Editor = self.tab {
+                if self.cursor.y == 0 {
+                    self.cursor.y = 2 
                 }
             }
             queue!(self.renderer, terminal::Clear(terminal::ClearType::UntilNewLine))?;
