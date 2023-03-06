@@ -41,7 +41,7 @@ fn create_config_file() -> Result<()> {
 
 fn main() -> Result<()> {
     enable_raw_mode()?;
-    create_config_file()?;
+    // create_config_file()?;
     let _ = WriteLogger::init(LevelFilter::Debug, Config::default(), File::create("debug.log").unwrap());
     let _disable_raw_mode = DisableRawMode;
     let mut window = Window::new();
