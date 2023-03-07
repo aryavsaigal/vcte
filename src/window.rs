@@ -303,7 +303,7 @@ impl Window {
         };
 
         let top_right = match self.tab {
-            Tab::Home => String::from("Home"),
+            Tab::Home => String::from("Home "),
             Tab::Editor => {
                 let (file_x, file_y) = (current_file.x+current_file.offset_x+1,current_file.y+current_file.offset_y-1);
                 format!("{}:{} {}", file_y, file_x, mode)
@@ -326,7 +326,7 @@ impl Window {
             _ => String::new()
         };
 
-        let status_bar = format!("{}{}{}\r\n", top_left, " ".repeat(terminal_x as usize-strip_ansi_escapes::strip(&top_right).unwrap().len()-strip_ansi_escapes::strip(&top_left).unwrap().len()), top_right);
+        let status_bar = format!("{}{}{} \r\n", top_left, " ".repeat(terminal_x as usize-strip_ansi_escapes::strip(&top_right).unwrap().len()-strip_ansi_escapes::strip(&top_left).unwrap().len()-1), top_right); // theres a random -1 because of padding on the right for better view idfk
         let status_message = format!("{}", bottom);
 
         queue!(self.renderer, terminal::Clear(terminal::ClearType::CurrentLine))?;
