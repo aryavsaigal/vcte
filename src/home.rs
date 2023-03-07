@@ -11,8 +11,9 @@ use std::io::Write;
 pub fn home(window: &mut Window) -> Result<()> {
     let (terminal_x, terminal_y) = terminal::size()?;
     queue!(window.renderer, cursor::MoveTo(0,0))?;
+    queue!(window.renderer, terminal::Clear(terminal::ClearType::CurrentLine))?;
     write!(window.renderer, "\n")?;
-    queue!(window.renderer, terminal::Clear(terminal::ClearType::UntilNewLine))?;
+    queue!(window.renderer, terminal::Clear(terminal::ClearType::CurrentLine))?;
 
     for i in 0..terminal_y-3 {
         write!(window.renderer, "~")?;

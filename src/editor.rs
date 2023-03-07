@@ -1,4 +1,4 @@
-use crate::window::{Window, File};
+use crate::{window::{Window, File}, status_message};
 use crossterm::{
     terminal,
     queue,
@@ -34,16 +34,43 @@ pub fn editor(window: &mut Window) -> Result<()> {
             file.content[y].push_str(" ".repeat(x - line_len).as_str());
         }
 
-        if inserted_char.backspace {
-            file.content[y].remove(x-1);
-            window.inserted_char = None;
-            window.cursor.move_cursor(KeyCode::Left, &mut window.renderer, file)?;
+        match inserted_char.character {
+            KeyCode::Esc => {
+                window.editor_mode = Mode::View;
+                queue!(window.renderer, cursor::SetCursorStyle::DefaultUserShape)?;
+            },
+            KeyCode::Char(c) => {
+                file.content[y].insert(x, c);
+                window.cursor.move_cursor(KeyCode::Right, &mut window.renderer, file)?;
+            },
+            KeyCode::Backspace => {
+                if x == 0 {
+                    if y  == 0 {
+                        return Ok(());
+                    }
+                    let line = file.content[y].clone();
+                    let prev_line_len = file.content[y-1].len();
+                    file.content[y-1].push_str(line.as_str());
+                    file.content.remove(y);
+                    window.cursor.move_to(prev_line_len as u16, (y+1) as u16, &mut window.renderer, file)?;
+                }
+                else {
+                    file.content[y].remove(x-1);
+                    window.cursor.move_cursor(KeyCode::Left, &mut window.renderer, file)?;
+                }
+            },
+            KeyCode::Enter => {
+                let new_line = file.content[y].split_off(x);
+                file.content.insert(y+1, new_line);
+                window.cursor.move_to(0, (y+3) as u16, &mut window.renderer, file)?; // +3 because 2 lines on top
+            },
+            direction @ (KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right) => {
+                window.cursor.move_cursor(direction, &mut window.renderer, file)?;
+                window.status_message.mode = status_message::Mode::Disabled;
+            },
+            _ => {}
         }
-        else {
-            file.content[y].insert(x, inserted_char.character);
-            window.inserted_char = None;
-            window.cursor.move_cursor(KeyCode::Right, &mut window.renderer, file)?;
-        }
+        window.inserted_char = None;
     }
 
     queue!(window.renderer, cursor::MoveTo(0,0))?;

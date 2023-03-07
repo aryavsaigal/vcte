@@ -1,0 +1,21 @@
+pub struct Readonly;
+
+impl Readonly {
+    pub fn help() -> Vec<String> {
+        "navigation:
+        (in view mode) wasd or arrow keys
+        (in insert mode) arrow keys
+commands (press : to enter command mode):
+        :q or :quit - quit
+        :s :save - save current file
+        :o <path> or :open <path> - open file 
+        :h or :help - show help (this menu)
+hotkeys:
+        i - enter insert mode
+        n - go to next tab
+        b - go to previous tab
+        x - close current tab
+        esc - escape almost everything"
+        .lines().map(|x| x.to_string()).collect()
+    }
+}

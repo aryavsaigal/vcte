@@ -8,7 +8,7 @@ use crossterm::{
     queue, execute,
 };
 
-use crate::cursor::Cursor;
+use crate::{cursor::Cursor, readonly};
 use crate::status_message::{self, StatusMessage};
 use crate::home::home;
 use crate::editor;
@@ -28,6 +28,7 @@ pub struct File {
     pub offset_y: u16,
     pub x: u16,
     pub y: u16,
+    pub readonly: bool,
 }
 
 impl File {
@@ -40,9 +41,21 @@ impl File {
             offset_y: 0,
             x: 0,
             y: 0,
+            readonly: false,
         }
     }
-    pub fn for_init() -> Self {
+    pub fn new_readonly(content: Vec<String>, title: String) -> Self {
+        Self {
+            content,
+            path: title,
+            offset_x: 0,
+            offset_y: 0,
+            x: 0,
+            y: 0,
+            readonly: true,
+        }
+    }
+    pub fn for_home() -> Self {
         Self {
             content: vec![],
             path: "[for init]".to_string(),
@@ -50,24 +63,23 @@ impl File {
             offset_y: 0,
             x: 0,
             y: 0,
+            readonly: true,
         }
     }
 }
 
 pub struct InsertedChar {
-    pub character: char,
+    pub character: KeyCode,
     pub x: u16,
     pub y: u16,
-    pub backspace: bool,
 }
 
 impl InsertedChar {
-    fn new(character: char, x: u16, y: u16, backspace: bool) -> Self {
+    fn new(character: KeyCode, x: u16, y: u16) -> Self {
         Self {
             character,
             x,
             y,
-            backspace,
         }
     }
 }
@@ -91,7 +103,7 @@ impl Window {
             cursor: Cursor::new(),
             tab: Tab::Home,
             status_message: StatusMessage::new(),
-            open_files: vec![File::for_init()],
+            open_files: vec![File::for_home()],
             editor_mode: editor::Mode::View,
             inserted_char: None,
             current_file_index: 0,
@@ -109,6 +121,14 @@ impl Window {
                     self.open_files.remove(0);
                 }
                 if commands.len() > 1 && Path::new(commands[1]).exists(){
+                    // check if file is already open
+                    if self.open_files.iter().any(|file| file.path ==  Path::new(commands[1]).to_str().unwrap().to_string()) {
+                        if let Some(index) = self.open_files.iter().position(|file| file.path ==  Path::new(commands[1]).to_str().unwrap().to_string()) {
+                            self.current_file_index = index;
+                            self.tab = Tab::Editor;
+                            return Ok(());
+                        }
+                    }
                     self.open_files.push(File::new(&Path::new(commands[1])));
                     self.current_file_index = self.open_files.len() - 1;
                     self.tab = Tab::Editor;
@@ -128,7 +148,16 @@ impl Window {
                     self.status_message.error = "No file open".to_string();
                     self.status_message.mode = status_message::Mode::Error;
                 }
-            }
+            },
+            "h" | "help" => {
+                if self.open_files[0].path == "[for init]" {
+                    self.open_files.remove(0);
+                }
+                self.open_files.push(File::new_readonly(readonly::Readonly::help(), "Help".to_string()));
+                self.current_file_index = self.open_files.len() - 1;
+                self.tab = Tab::Editor;
+                self.cursor.move_to(self.open_files[self.current_file_index].x, self.open_files[self.current_file_index].x, &mut self.renderer, &mut self.open_files[self.current_file_index])?;
+            },
             _ => {
                 self.status_message.error = format!("Not a command: {}", self.status_message.command);
                 self.status_message.mode = status_message::Mode::Error;
@@ -169,29 +198,19 @@ impl Window {
                             }
                             else if let Tab::Editor = self.tab {
                                 if let editor::Mode::Insert = self.editor_mode {
-                                    match key.code {
-                                        KeyCode::Esc => {
-                                            self.editor_mode = editor::Mode::View;
-                                            queue!(self.renderer, cursor::SetCursorStyle::DefaultUserShape)?;
-                                        },
-                                        KeyCode::Char(c) => {
-                                            self.inserted_char = Some(InsertedChar::new(c, self.open_files[self.current_file_index].x, self.open_files[self.current_file_index].y, false));
-                                        },
-                                        KeyCode::Backspace => {
-                                            self.inserted_char = Some(InsertedChar::new(' ', self.open_files[self.current_file_index].x, self.open_files[self.current_file_index].y, true));
-                                        },
-                                        direction @ (KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right) => {
-                                            self.cursor.move_cursor(direction, &mut self.renderer, &mut self.open_files[self.current_file_index])?;
-                                            self.status_message.mode = status_message::Mode::Disabled;
-                                        },
-                                        _ => {}
-                                    }
+                                    self.inserted_char = Some(InsertedChar::new(key.code, self.open_files[self.current_file_index].x, self.open_files[self.current_file_index].y));
                                 }
                                 else if let editor::Mode::View = self.editor_mode {
                                     match key.code {
                                         KeyCode::Char('i') => {
-                                            self.editor_mode = editor::Mode::Insert;
-                                            queue!(self.renderer, cursor::SetCursorStyle::BlinkingBar)?;
+                                            if self.open_files[self.current_file_index].readonly {
+                                                self.status_message.error = "File is readonly".to_string();
+                                                self.status_message.mode = status_message::Mode::Error;
+                                            }
+                                            else {
+                                                self.editor_mode = editor::Mode::Insert;
+                                                queue!(self.renderer, cursor::SetCursorStyle::BlinkingBar)?;
+                                            }
                                         },
                                         KeyCode::Char('n') => {
                                             self.current_file_index = if self.current_file_index == self.open_files.len() - 1 {
@@ -208,6 +227,14 @@ impl Window {
                                                 self.current_file_index - 1
                                             };
                                             self.cursor.move_to(self.open_files[self.current_file_index].x, self.open_files[self.current_file_index].y, &mut self.renderer, &mut self.open_files[self.current_file_index])?;
+                                        },
+                                        KeyCode::Char('x') => {
+                                            self.open_files.remove(self.current_file_index);
+                                            self.current_file_index = self.current_file_index.saturating_sub(1);
+                                            if self.open_files.len() == 0 {
+                                                self.open_files.push(File::for_home());
+                                                self.tab = Tab::Home;
+                                            }
                                         },
                                         KeyCode::Char(':') => {
                                             self.status_message.mode = status_message::Mode::Enabled;
@@ -269,13 +296,23 @@ impl Window {
         let (terminal_x, terminal_y) = terminal::size()?;
         let (x,y) = if let status_message::Mode::Enabled = self.status_message.mode { (1+self.status_message.command.len() as u16, terminal_y-1) } else { (current_file.x, current_file.y) };
 
-        let top = match self.tab {
+        let mode = match self.editor_mode {
+            editor::Mode::Insert => String::from("--insert mode--") .red().to_string(),
+            editor::Mode::View => String::from("--view mode--") .green().to_string(),
+            _ => String::new()
+        };
+
+        let top_right = match self.tab {
             Tab::Home => String::from("Home"),
-            Tab::Editor => format!("{}:{} {}", current_file.y+current_file.offset_y-1, current_file.x+current_file.offset_x+1, match self.editor_mode {
-                editor::Mode::Insert => String::from("--insert mode--") .red().to_string(),
-                editor::Mode::View => String::from("--view mode--") .green().to_string(),
-                _ => String::new()
-            }),
+            Tab::Editor => {
+                let (file_x, file_y) = (current_file.x+current_file.offset_x+1,current_file.y+current_file.offset_y-1);
+                format!("{}:{} {}", file_y, file_x, mode)
+            },
+            _ => String::new()
+        };
+
+        let top_left = match self.tab {
+            Tab::Editor => String::new(),
             _ => String::new()
         };
 
@@ -289,7 +326,7 @@ impl Window {
             _ => String::new()
         };
 
-        let status_bar = format!("{}{}\r\n", " ".repeat(terminal_x as usize-strip_ansi_escapes::strip(&top).unwrap().len()), top);
+        let status_bar = format!("{}{}{}\r\n", top_left, " ".repeat(terminal_x as usize-strip_ansi_escapes::strip(&top_right).unwrap().len()-strip_ansi_escapes::strip(&top_left).unwrap().len()), top_right);
         let status_message = format!("{}", bottom);
 
         queue!(self.renderer, terminal::Clear(terminal::ClearType::CurrentLine))?;

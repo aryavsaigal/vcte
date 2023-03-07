@@ -3,6 +3,7 @@ pub(crate) mod cursor;
 pub(crate) mod status_message;
 pub(crate) mod home;
 pub(crate) mod editor;
+pub(crate) mod readonly;
 
 use crossterm::{
     terminal::{ disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen}, 
