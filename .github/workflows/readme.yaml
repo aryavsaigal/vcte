@@ -3,15 +3,23 @@ name: Update Readme Documentation
 on: push
 
 jobs:
-  update_readme:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-      - name: Run script
-        run: node ./scripts/readme.js
-      - name: Commit and push changes
-        run: |
-          git add README.md
-          git commit -m "Update Documentation"
-          git push
+    - uses: actions/checkout@v2
+      with:
+        persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
+        fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
+    - name: Create local changes
+      run: |
+        node ./scripts/readme.js
+    - name: Commit files
+      run: |
+        git config --local user.name "github-actions[bot]"
+        git add README.md
+        git commit -m "Update README"
+    - name: Push changes
+      uses: ad-m/github-push-action@master
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        branch: ${{ github.ref }}
