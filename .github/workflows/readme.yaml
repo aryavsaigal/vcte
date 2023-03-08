@@ -10,3 +10,8 @@ jobs:
         uses: actions/checkout@v3
       - name: Run script
         run: node ./scripts/readme.js
+      - name: Commit and push changes
+        run: |
+          git add README.md
+          git commit -m "Update Documentation"
+          git push
