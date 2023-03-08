@@ -70,14 +70,16 @@ impl File {
 
 pub struct InsertedChar {
     pub character: KeyCode,
+    pub modifier: KeyModifiers,
     pub x: u16,
     pub y: u16,
 }
 
 impl InsertedChar {
-    fn new(character: KeyCode, x: u16, y: u16) -> Self {
+    fn new(character: KeyCode, modifier: KeyModifiers, x: u16, y: u16) -> Self {
         Self {
             character,
+            modifier,
             x,
             y,
         }
@@ -153,7 +155,7 @@ impl Window {
                 if self.open_files[0].path == "[for init]" {
                     self.open_files.remove(0);
                 }
-                self.open_files.push(File::new_readonly(readonly::Readonly::help(), "Help".to_string()));
+                self.open_files.push(File::new_readonly(readonly::help(), "Help".to_string()));
                 self.current_file_index = self.open_files.len() - 1;
                 self.tab = Tab::Editor;
                 self.cursor.move_to(self.open_files[self.current_file_index].x, self.open_files[self.current_file_index].x, &mut self.renderer, &mut self.open_files[self.current_file_index])?;
@@ -198,7 +200,7 @@ impl Window {
                             }
                             else if let Tab::Editor = self.tab {
                                 if let editor::Mode::Insert = self.editor_mode {
-                                    self.inserted_char = Some(InsertedChar::new(key.code, self.open_files[self.current_file_index].x, self.open_files[self.current_file_index].y));
+                                    self.inserted_char = Some(InsertedChar::new(key.code, key.modifiers, self.open_files[self.current_file_index].x, self.open_files[self.current_file_index].y));
                                 }
                                 else if let editor::Mode::View = self.editor_mode {
                                     match key.code {
@@ -212,21 +214,43 @@ impl Window {
                                                 queue!(self.renderer, cursor::SetCursorStyle::BlinkingBar)?;
                                             }
                                         },
-                                        KeyCode::Char('n') => {
-                                            self.current_file_index = if self.current_file_index == self.open_files.len() - 1 {
-                                                0
-                                            } else {
-                                                self.current_file_index + 1
-                                            };
-                                            self.cursor.move_to(self.open_files[self.current_file_index].x, self.open_files[self.current_file_index].y, &mut self.renderer, &mut self.open_files[self.current_file_index])?;
+                                        KeyCode::Char('n') | KeyCode::Char('N') => {
+                                            if let KeyModifiers::SHIFT = key.modifiers {
+                                                let file = self.open_files.remove(self.current_file_index);
+                                                self.current_file_index = if self.current_file_index == self.open_files.len() {
+                                                    0
+                                                } else {
+                                                    self.current_file_index + 1
+                                                };
+                                                self.open_files.insert(self.current_file_index, file);
+                                            }
+                                            else {
+                                                self.current_file_index = if self.current_file_index == self.open_files.len() - 1 {
+                                                    0
+                                                } else {
+                                                    self.current_file_index + 1
+                                                };
+                                                self.cursor.move_to(self.open_files[self.current_file_index].x, self.open_files[self.current_file_index].y, &mut self.renderer, &mut self.open_files[self.current_file_index])?;
+                                            }
                                         }
-                                        KeyCode::Char('b') => {
-                                            self.current_file_index = if self.current_file_index == 0 {
-                                                self.open_files.len() - 1
-                                            } else {
-                                                self.current_file_index - 1
-                                            };
-                                            self.cursor.move_to(self.open_files[self.current_file_index].x, self.open_files[self.current_file_index].y, &mut self.renderer, &mut self.open_files[self.current_file_index])?;
+                                        KeyCode::Char('b') | KeyCode::Char('B') => {
+                                            if let KeyModifiers::SHIFT = key.modifiers {
+                                                let file = self.open_files.remove(self.current_file_index);
+                                                self.current_file_index = if self.current_file_index == 0 {
+                                                    self.open_files.len()
+                                                } else {
+                                                    self.current_file_index - 1
+                                                };
+                                                self.open_files.insert(self.current_file_index, file);
+                                            }
+                                            else {
+                                                self.current_file_index = if self.current_file_index == 0 {
+                                                    self.open_files.len() - 1
+                                                } else {
+                                                    self.current_file_index - 1
+                                                };
+                                                self.cursor.move_to(self.open_files[self.current_file_index].x, self.open_files[self.current_file_index].y, &mut self.renderer, &mut self.open_files[self.current_file_index])?;
+                                            }
                                         },
                                         KeyCode::Char('x') => {
                                             self.open_files.remove(self.current_file_index);
