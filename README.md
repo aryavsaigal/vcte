@@ -33,10 +33,24 @@ vcte is still in beta, you can try it out by
 
 
 ## Documentation
-
-to be added
-
-
+```
+navigation:
+        (in view mode) wasd or arrow keys
+        (in insert mode) arrow keys
+commands (press : to enter command mode):
+        :q or :quit - quit
+        :s :save - save current file
+        :o <path> or :open <path> - open file 
+        :h or :help - show help (this menu)
+hotkeys:
+        i - enter insert mode
+        n - go to next tab
+        shift + n - move tab to the right
+        b - go to previous tab
+        shift + b - move tab to the left
+        x - close current tab
+        esc - escape almost everything
+```
 ## Authors
 
 - [@DARKDRAGON532](https://www.github.com/DARKDRAGON532)
