@@ -11,14 +11,17 @@ jobs:
         persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
         fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
     - name: Create local changes
+      id: script
       run: |
         node ./scripts/readme.js
     - name: Commit files
+      if: steps.script.outputs[0] == "y"
       run: |
         git config --local user.name "github-actions[bot]"
         git add README.md
         git commit -m "Update README"
     - name: Push changes
+      if: steps.script.outputs[0] == "y"
       uses: ad-m/github-push-action@master
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}

@@ -14,3 +14,9 @@ let index_end = readmeContent.indexOf('## Authors');
 
 let newReadme = readmeContent.slice(0, index_start) + `\n\`\`\`${help}\`\`\`\n` + readmeContent.slice(index_end);
 fs.writeFileSync(readme, newReadme);
+if (readmeContent == newReadme) {
+  console.log('n');
+}
+else {
+  console.log('y');
+}
