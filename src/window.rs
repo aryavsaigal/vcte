@@ -170,7 +170,7 @@ impl Window {
 
     fn parse_quick_command(&mut self) -> Result<()> {
         let command = self.status_message.quick_command.clone();
-        self.status_message.quick_command.clear();
+        let current_file = &mut self.open_files[self.current_file_index];
         match command.chars().last().unwrap() {
             'j' => {
                 if command.len() > 1 {
@@ -187,7 +187,15 @@ impl Window {
                     self.status_message.error = "No number specified".to_string();
                     self.status_message.mode = status_message::Mode::Error;
                 }
+                self.status_message.quick_command.clear();
             },
+            'r' => {
+                if command == "rr" {
+                    current_file.content.remove((current_file.y + current_file.offset_y - 2) as usize);
+                    self.cursor.move_to(current_file.x, current_file.y-1, &mut self.renderer, &mut self.open_files[self.current_file_index])?;
+                    self.status_message.quick_command.clear();
+                }
+            }
             _ => ()
         }
         Ok(())
@@ -294,7 +302,7 @@ impl Window {
                                         KeyCode::Char(c) => {
                                             self.status_message.quick_command.push(c);
                                             match c {
-                                                'j' => self.parse_quick_command()?,
+                                                'j' | 'r' => self.parse_quick_command()?,
                                                 // '%' => self.status_message.quick_command.clear(),
                                                 _ => {}
                                             }

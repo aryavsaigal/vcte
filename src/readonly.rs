@@ -14,6 +14,9 @@ hotkeys:
         b - go to previous tab
         shift + b - move tab to the left
         x - close current tab
-        esc - escape almost everything"
+        esc - escape almost everything
+quick commands: (in view mode only)
+        (number)j - jumps to line number
+        rr - deletes current line"
         .lines().map(|x| x.to_string()).collect()
 }
