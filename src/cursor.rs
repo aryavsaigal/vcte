@@ -27,8 +27,41 @@ impl Cursor {
     }
 
     pub fn move_to(&mut self, x: u16, y: u16, renderer: &mut Stdout, file: &mut File) -> Result<()> {
-        queue!(renderer, cursor::MoveTo(x, y))?;
-        self.update_coords((x, y), file);
+        let (terminal_x, terminal_y) = terminal::size()?;
+        // if x > terminal_x-1 {
+        //     file.offset_x += x-file.x;
+        // }
+        if y >= file.content.len() as u16 - terminal_y + 3 {
+            file.offset_y = file.content.len() as u16 - terminal_y + 3;
+
+            let new_y = if y > file.content.len() as u16 {
+                file.content.len() as u16 - (file.content.len() as u16 - terminal_y + 3)
+            }
+            else {
+                y-file.offset_y+1
+            };
+
+            queue!(renderer, cursor::MoveTo(x, new_y))?;
+            self.update_coords((x, new_y), file);
+            return Ok(())
+        } 
+        else {
+            if y > terminal_y-1 {
+                file.offset_y = y-1;
+                queue!(renderer, cursor::MoveTo(x, 1))?;
+                self.update_coords((x, 1), file);
+                return Ok(())
+            }
+            else if y < file.offset_y {
+                file.offset_y = y-1;
+                queue!(renderer, cursor::MoveTo(x, 1))?;
+                self.update_coords((x, 1), file);
+                return Ok(())
+            }
+        }
+
+        queue!(renderer, cursor::MoveTo(x, y+1))?;
+        self.update_coords((x, y+1), file);
         Ok(())
     }
 
@@ -46,7 +79,9 @@ impl Cursor {
                 },
                 KeyCode::Down | KeyCode::Char('s')=> {
                     if file.y == terminal_y-3 {
-                        file.offset_y += 1;
+                        if file.offset_y+file.y < file.content.len() as u16 {
+                            file.offset_y += 1;
+                        }
                     } 
                     else {
                         queue!(renderer, cursor::MoveDown(1))?;

@@ -1,6 +1,6 @@
 use std::{io::{Stdout, Write, Error, ErrorKind}, time::Duration, path::Path};
 use crossterm::{
-    event::{poll, read, Event, KeyCode, KeyModifiers},
+    event::{poll, read, Event, KeyCode, KeyModifiers, MouseEventKind, MouseButton},
     terminal,
     style::{Color, Print, ResetColor, SetBackgroundColor, SetForegroundColor, Stylize},
     cursor,
@@ -168,6 +168,31 @@ impl Window {
         Ok(())
     }
 
+    fn parse_quick_command(&mut self) -> Result<()> {
+        let command = self.status_message.quick_command.clone();
+        self.status_message.quick_command.clear();
+        match command.chars().last().unwrap() {
+            'j' => {
+                if command.len() > 1 {
+                    match command[0..command.len()-1].parse::<u16>() {
+                        Ok(y) => {
+                            self.cursor.move_to(self.open_files[self.current_file_index].x, y, &mut self.renderer, &mut self.open_files[self.current_file_index])?;
+                        },
+                        Err(_) => {
+                            self.status_message.error = "Not a number".to_string();
+                            self.status_message.mode = status_message::Mode::Error;
+                        }
+                    }
+                } else {
+                    self.status_message.error = "No number specified".to_string();
+                    self.status_message.mode = status_message::Mode::Error;
+                }
+            },
+            _ => ()
+        }
+        Ok(())
+    }
+
     fn parse_input(&mut self) -> Result<()> {
         if poll(Duration::from_millis(50))? {
             match read()? {
@@ -263,8 +288,18 @@ impl Window {
                                         KeyCode::Char(':') => {
                                             self.status_message.mode = status_message::Mode::Enabled;
                                         },
+                                        directions @ (KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right | KeyCode::Char('w') | KeyCode::Char('a') | KeyCode::Char('s') | KeyCode::Char('d')) => {
+                                            self.cursor.move_cursor(directions, &mut self.renderer, &mut self.open_files[self.current_file_index])?;
+                                        },
+                                        KeyCode::Char(c) => {
+                                            self.status_message.quick_command.push(c);
+                                            match c {
+                                                'j' => self.parse_quick_command()?,
+                                                // '%' => self.status_message.quick_command.clear(),
+                                                _ => {}
+                                            }
+                                        }
                                         _ => {
-                                            self.cursor.move_cursor(key.code, &mut self.renderer, &mut self.open_files[self.current_file_index])?;
                                             self.status_message.mode = status_message::Mode::Disabled;
                                         }
                                     }
@@ -285,6 +320,22 @@ impl Window {
                         _ => {}
                     }
                 },
+                Event::Mouse(event) => {
+                    match event.kind {
+                        MouseEventKind::Down(button) => {
+                            if let MouseButton::Left = button {
+                                self.cursor.move_to(event.column as u16, event.row as u16, &mut self.renderer, &mut self.open_files[self.current_file_index])?;
+                            }
+                        }
+                        MouseEventKind::ScrollDown => {
+                            self.cursor.move_cursor(KeyCode::Down, &mut self.renderer, &mut self.open_files[self.current_file_index])?;
+                        }
+                        MouseEventKind::ScrollUp => {
+                            self.cursor.move_cursor(KeyCode::Up, &mut self.renderer, &mut self.open_files[self.current_file_index])?;
+                        },
+                        _ => {}
+                    }
+                },
                 _ => {}
             }
         };
@@ -294,7 +345,7 @@ impl Window {
     pub fn ui(&mut self) -> Result<()> {
         loop {
             self.parse_input()?;
-            execute!(self.renderer, cursor::Hide)?;
+            execute!(self.renderer, cursor::Hide, cursor::DisableBlinking)?;
             match self.tab {
                 Tab::Home => {
                     home(self)?;
@@ -304,14 +355,14 @@ impl Window {
                 }
             }
             if let Tab::Editor = self.tab {
-                if self.open_files[self.current_file_index].y == 0 {
+                if self.open_files[self.current_file_index].y == 0 || self.open_files[self.current_file_index].y == 1 {
                     self.open_files[self.current_file_index].y = 2 
                 }
             }
 
             self.render_status_message()?;
 
-            queue!(self.renderer, cursor::Show)?;
+            queue!(self.renderer, cursor::Show, cursor::EnableBlinking)?;
             self.renderer.flush()?;
         }
     }
@@ -321,8 +372,8 @@ impl Window {
         let (x,y) = if let status_message::Mode::Enabled = self.status_message.mode { (1+self.status_message.command.len() as u16, terminal_y-1) } else { (current_file.x, current_file.y) };
 
         let mode = match self.editor_mode {
-            editor::Mode::Insert => String::from("--insert mode--") .red().to_string(),
-            editor::Mode::View => String::from("--view mode--") .green().to_string(),
+            editor::Mode::Insert => String::from("--insert mode--").red().to_string(),
+            editor::Mode::View => String::from("--view mode--").green().to_string(),
             _ => String::new()
         };
 
@@ -330,7 +381,7 @@ impl Window {
             Tab::Home => String::from("Home "),
             Tab::Editor => {
                 let (file_x, file_y) = (current_file.x+current_file.offset_x+1,current_file.y+current_file.offset_y-1);
-                format!("{}:{} {}", file_y, file_x, mode)
+                format!("{} {}:{} {}", self.status_message.quick_command.clone().dark_red(), file_y, file_x, mode)
             },
             _ => String::new()
         };
@@ -345,7 +396,7 @@ impl Window {
                 self.cursor.movable = false;
                 format!(":{}", self.status_message.command)
             },
-            status_message::Mode::Error => format!("Error: {}", self.status_message.error) .red().to_string(),
+            status_message::Mode::Error => format!("Error: {}", self.status_message.error).red().to_string(),
             status_message::Mode::Success => format!("{}", self.status_message.success).green().to_string(),
             _ => String::new()
         };

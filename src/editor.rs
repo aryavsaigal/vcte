@@ -62,7 +62,7 @@ pub fn editor(window: &mut Window) -> Result<()> {
             KeyCode::Enter => {
                 let new_line = file.content[y].split_off(x);
                 file.content.insert(y+1, new_line);
-                window.cursor.move_to(0, (y+3) as u16, &mut window.renderer, file)?; // +3 because 2 lines on top
+                window.cursor.move_cursor(KeyCode::Down, &mut window.renderer, file)?;
             },
             direction @ (KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right) => {
                 window.cursor.move_cursor(direction, &mut window.renderer, file)?;

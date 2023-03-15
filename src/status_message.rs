@@ -10,6 +10,7 @@ pub struct StatusMessage {
     pub command: String,
     pub error: String,
     pub success: String,
+    pub quick_command: String
 }
 
 impl StatusMessage {
@@ -18,7 +19,8 @@ impl StatusMessage {
             mode: Mode::Disabled,
             command: String::new(),
             error: String::new(),
-            success: String::new()
+            success: String::new(),
+            quick_command: String::new()
         }
     }
 }
