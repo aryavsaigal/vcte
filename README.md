@@ -50,6 +50,9 @@ hotkeys:
         shift + b - move tab to the left
         x - close current tab
         esc - escape almost everything
+quick commands: (in view mode only)
+        (number)j - jumps to line number
+        rr - deletes current line
 ```
 ## Authors
 
