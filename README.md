@@ -14,7 +14,7 @@ vcte is still in beta, you can try it out by
 ```bash
   git clone https://github.com/DARKDRAGON532/vcte.git
   cd vcte
-  cargo run
+  cargo run --release
 ```
     
 ## Features
