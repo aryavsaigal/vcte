@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { exec } = require('child_process');
 
 const file = path.join(__dirname, '../src/readonly.rs');
 const readme = path.join(__dirname, '../README.md');
@@ -14,9 +15,8 @@ let index_end = readmeContent.indexOf('## Authors');
 
 let newReadme = readmeContent.slice(0, index_start) + `\n\`\`\`${help}\`\`\`\n` + readmeContent.slice(index_end);
 fs.writeFileSync(readme, newReadme);
-if (readmeContent == newReadme) {
-  console.log('n');
-}
-else {
-  console.log('y');
+if (readmeContent != newReadme) {
+  exec('git config --local user.name \"github-actions[bot]\"', (err, stdout, stderr) => {});
+  exec('git add README.md', (err, stdout, stderr) => {});
+  exec('git commit -m \"Update README.md\"', (err, stdout, stderr) => {});
 }

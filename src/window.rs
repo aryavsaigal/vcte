@@ -306,7 +306,10 @@ impl Window {
                                                 // '%' => self.status_message.quick_command.clear(),
                                                 _ => {}
                                             }
-                                        }
+                                        },
+                                        KeyCode::Esc => {
+                                            self.status_message.quick_command.clear();
+                                        },
                                         _ => {
                                             self.status_message.mode = status_message::Mode::Disabled;
                                         }
