@@ -1,348 +1,147 @@
-use std::{io::{Stdout, Write, Error, ErrorKind}, time::Duration, path::Path};
+use std::{io::{Stdout, stdout, Write, ErrorKind, Error}, time::Duration, path::Path};
 use crossterm::{
-    event::{poll, read, Event, KeyCode, KeyModifiers, MouseEventKind, MouseButton},
-    terminal,
-    style::{Color, Print, ResetColor, SetBackgroundColor, SetForegroundColor, Stylize},
-    cursor,
-    Result,
-    queue, execute,
+    event::{poll, read, Event, KeyCode, KeyModifiers},
+    Result, 
+    queue,
+    cursor, terminal, style::Color
 };
 
-use crate::{cursor::Cursor, readonly};
-use crate::status_message::{self, StatusMessage};
-use crate::home::home;
-use crate::editor;
+use crate::{colour_string::{ColourString, Info}, editor::File};
+use crate::home::Home;
+use crate::command_palette::CommandPalette;
+use crate::file_explorer::FileExplorer;
 
-extern crate strip_ansi_escapes;
-
-pub enum Tab {
-    Home,
-    Editor,
+pub struct Frame {
+    pub content: Vec<ColourString>,
+    pub push: bool,
 }
 
-#[derive(Clone)]
-pub struct File {
-    pub content: Vec<String>,
-    pub path: String,
-    pub offset_x: u16,
-    pub offset_y: u16,
-    pub x: u16,
-    pub y: u16,
-    pub readonly: bool,
-}
-
-impl File {
-    pub fn new(path: &Path) -> Self {
-        let content = editor::open_file(&Path::new(path));
+impl Frame {
+    pub fn new(content: Vec<ColourString>, push: bool) -> Self {
         Self {
             content,
-            path: path.to_str().unwrap().to_string(),
-            offset_x: 0,
-            offset_y: 0,
-            x: 0,
-            y: 0,
-            readonly: false,
-        }
-    }
-    pub fn new_readonly(content: Vec<String>, title: String) -> Self {
-        Self {
-            content,
-            path: title,
-            offset_x: 0,
-            offset_y: 0,
-            x: 0,
-            y: 0,
-            readonly: true,
-        }
-    }
-    pub fn for_home() -> Self {
-        Self {
-            content: vec![],
-            path: "[for init]".to_string(),
-            offset_x: 0,
-            offset_y: 0,
-            x: 0,
-            y: 0,
-            readonly: true,
-        }
-    }
-}
-
-pub struct InsertedChar {
-    pub character: KeyCode,
-    pub modifier: KeyModifiers,
-    pub x: u16,
-    pub y: u16,
-}
-
-impl InsertedChar {
-    fn new(character: KeyCode, modifier: KeyModifiers, x: u16, y: u16) -> Self {
-        Self {
-            character,
-            modifier,
-            x,
-            y,
+            push,
         }
     }
 }
 
 pub struct Window {
     pub renderer: Stdout,
-    pub cursor: Cursor,
-    pub tab: Tab,
-    pub status_message: StatusMessage,
-    pub open_files: Vec<File>,
-    pub editor_mode: editor::Mode,
-    pub inserted_char: Option<InsertedChar>,
-    pub current_file_index: usize,
-
+    pub command_palette: CommandPalette,
+    pub file_explorer: FileExplorer,
+    pub files: Vec<File>,
+    pub file_index: usize,
+    pub frames: Vec<Frame>,
+    pub home: Home,
+    pub overlay: bool,
 }
 
 impl Window {
     pub fn new() -> Self {
         Self {
-            renderer: std::io::stdout(),
-            cursor: Cursor::new(),
-            tab: Tab::Home,
-            status_message: StatusMessage::new(),
-            open_files: vec![File::for_home()],
-            editor_mode: editor::Mode::View,
-            inserted_char: None,
-            current_file_index: 0,
+            renderer: stdout(),
+            frames: Vec::new(),
+            files: Vec::new(),
+            file_index: 0,
+            home: Home::new(),
+            command_palette: CommandPalette::new(),
+            file_explorer: FileExplorer::new(),
+            overlay: false,
         }
     }
 
-    pub fn parse_command(&mut self) -> Result<()> {
-        let commands: Vec<&str> = self.status_message.command.split_whitespace().collect();
-        match commands[0] {
-            "q" | "quit" => {
-               return Err(Error::new(ErrorKind::Other, "Quit").into());
-            },
-            "o" | "open" => {
-                if self.open_files[0].path == "[for init]" {
-                    self.open_files.remove(0);
+    pub fn register(&mut self, frame: Vec<ColourString>, push: bool) {
+        self.frames.push(Frame::new(frame, push));
+    }
+
+    fn render_frames(&mut self) -> Result<()> {
+        let (terminal_x, terminal_y) = terminal::size()?;
+        let mut final_frame: Vec<ColourString> = vec![ColourString::new(String::from(" ".repeat(terminal_x as usize)), None); terminal_y as usize];
+        let mut it = self.frames.iter_mut().peekable();
+        while let Some(frame) = it.next() {
+            frame.content.truncate(terminal_y as usize);
+
+            let is_last = it.peek().is_none();
+            for line_index in 0..frame.content.len() {
+                if frame.content[line_index].get_content().is_empty() {
+                    continue;
                 }
-                if commands.len() > 1 && Path::new(commands[1]).exists(){
-                    // check if file is already open
-                    if self.open_files.iter().any(|file| file.path ==  Path::new(commands[1]).to_str().unwrap().to_string()) {
-                        if let Some(index) = self.open_files.iter().position(|file| file.path ==  Path::new(commands[1]).to_str().unwrap().to_string()) {
-                            self.current_file_index = index;
-                            self.tab = Tab::Editor;
-                            return Ok(());
+
+                for (char_index, char) in frame.content[line_index].get_content().clone().iter_mut().enumerate().rev() {
+                    if char.content != " " {
+                        if self.overlay && !is_last && char.content != "█" {
+                            char.colour = Info::new(Color::DarkGrey, Color::Reset, vec![]);
                         }
+
+                        if frame.push {
+                            final_frame[line_index].l_shift(char.content.clone(), Some(char.colour.clone()));
+                        } else {
+                            final_frame[line_index].replace_range(char_index, char_index+1, ColourString::new(char.content.clone(), Some(char.colour.clone())));
+                        }
+
+                        final_frame[line_index].truncate(terminal_x as usize);
                     }
-                    self.open_files.push(File::new(&Path::new(commands[1])));
-                    self.current_file_index = self.open_files.len() - 1;
-                    self.tab = Tab::Editor;
-                    self.cursor.move_to(self.open_files[self.current_file_index].x, self.open_files[self.current_file_index].x, &mut self.renderer, &mut self.open_files[self.current_file_index])?;
-                } else {
-                    self.status_message.error = "No file specified".to_string();
-                    self.status_message.mode = status_message::Mode::Error;
                 }
-            },
-            "s" | "save" => {
-                if let Tab::Editor = self.tab {
-                    editor::save_file(&self.open_files[self.current_file_index])?;
-                    self.status_message.success = "File saved".to_string();
-                    self.status_message.mode = status_message::Mode::Success;
-                } 
-                else {
-                    self.status_message.error = "No file open".to_string();
-                    self.status_message.mode = status_message::Mode::Error;
-                }
-            },
-            "h" | "help" => {
-                if self.open_files[0].path == "[for init]" {
-                    self.open_files.remove(0);
-                }
-                self.open_files.push(File::new_readonly(readonly::help(), "Help".to_string()));
-                self.current_file_index = self.open_files.len() - 1;
-                self.tab = Tab::Editor;
-                self.cursor.move_to(self.open_files[self.current_file_index].x, self.open_files[self.current_file_index].x, &mut self.renderer, &mut self.open_files[self.current_file_index])?;
-            },
-            _ => {
-                self.status_message.error = format!("Not a command: {}", self.status_message.command);
-                self.status_message.mode = status_message::Mode::Error;
             }
         }
+
+        queue!(self.renderer, cursor::MoveTo(0,0))?;
+        queue!(self.renderer, terminal::Clear(terminal::ClearType::All))?;
+        write!(self.renderer, "{}", ColourString::render_vector(final_frame))?;
+        self.overlay = false;
+        self.frames.clear();
         Ok(())
     }
 
-    fn parse_quick_command(&mut self) -> Result<()> {
-        let command = self.status_message.quick_command.clone();
-        let current_file = &mut self.open_files[self.current_file_index];
-        match command.chars().last().unwrap() {
-            'j' => {
-                if command.len() > 1 {
-                    match command[0..command.len()-1].parse::<u16>() {
-                        Ok(y) => {
-                            self.cursor.move_to(self.open_files[self.current_file_index].x, y, &mut self.renderer, &mut self.open_files[self.current_file_index])?;
-                        },
-                        Err(_) => {
-                            self.status_message.error = "Not a number".to_string();
-                            self.status_message.mode = status_message::Mode::Error;
-                        }
-                    }
-                } else {
-                    self.status_message.error = "No number specified".to_string();
-                    self.status_message.mode = status_message::Mode::Error;
-                }
-                self.status_message.quick_command.clear();
-            },
-            'r' => {
-                if command == "rr" {
-                    current_file.content.remove((current_file.y + current_file.offset_y - 2) as usize);
-                    self.cursor.move_to(current_file.x, current_file.y-1, &mut self.renderer, &mut self.open_files[self.current_file_index])?;
-                    self.status_message.quick_command.clear();
-                }
-            }
-            _ => ()
-        }
-        Ok(())
-    }
 
-    fn parse_input(&mut self) -> Result<()> {
+    pub fn parse_input(&mut self) -> Result<()> {
         if poll(Duration::from_millis(50))? {
             match read()? {
                 Event::Key(key) => {
                     match key.modifiers {
                         KeyModifiers::NONE | KeyModifiers::SHIFT => {
-                            if let status_message::Mode::Enabled = self.status_message.mode {
+                            if self.command_palette.enabled {
                                 match key.code {
                                     KeyCode::Char(c) => {
-                                        self.status_message.command.push(c);
-                                    },
-                                    KeyCode::Esc => {
-                                        self.status_message.mode = status_message::Mode::Disabled;
-                                        self.status_message.command.clear();
-                                        self.cursor.movable = true;
-                                    },
-                                    KeyCode::Enter => {
-                                        self.status_message.mode = status_message::Mode::Disabled;
-                                        self.parse_command()?;
-                                        self.status_message.command.clear();
-                                        self.cursor.movable = true;
+                                        self.command_palette.command.push(c);
                                     },
                                     KeyCode::Backspace => {
-                                        if let None = self.status_message.command.pop() {
-                                            self.status_message.mode = status_message::Mode::Disabled;
+                                        self.command_palette.command.pop();
+                                        if self.command_palette.command.is_empty() {
+                                            self.command_palette.enabled = false;
+                                        }
+                                    },
+                                    KeyCode::Enter => {
+                                        self.command_palette.enabled = false;
+                                        self.parse_command()?;
+                                    },
+                                    KeyCode::Esc => {
+                                        self.command_palette.enabled = false;
+                                        self.command_palette.command = String::new();
+                                    },
+                                    _ => {}
+                                }
+                            }
+                            else {
+                                match key.code {
+                                    KeyCode::Char(':') => {
+                                        self.command_palette.enabled = true;
+                                    },
+                                    KeyCode::Char('c') => {
+                                        self.file_explorer.enabled = !self.file_explorer.enabled;
+                                    },
+                                    direction @ (KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right | KeyCode::Char('w') | KeyCode::Char('a') | KeyCode::Char('s') | KeyCode::Char('d')) => {
+                                        if self.files.is_empty() {
+                                            debug!("YADA");
+                                            self.home.cursor.parse_direction(direction);
+                                        }
+                                        else {
+                                            self.files[self.file_index].cursor.parse_direction(direction);
                                         }
                                     },
                                     _ => {}
                                 }
                             }
-                            else if let Tab::Editor = self.tab {
-                                if let editor::Mode::Insert = self.editor_mode {
-                                    self.inserted_char = Some(InsertedChar::new(key.code, key.modifiers, self.open_files[self.current_file_index].x, self.open_files[self.current_file_index].y));
-                                }
-                                else if let editor::Mode::View = self.editor_mode {
-                                    match key.code {
-                                        KeyCode::Char('i') => {
-                                            if self.open_files[self.current_file_index].readonly {
-                                                self.status_message.error = "File is readonly".to_string();
-                                                self.status_message.mode = status_message::Mode::Error;
-                                            }
-                                            else {
-                                                self.editor_mode = editor::Mode::Insert;
-                                                queue!(self.renderer, cursor::SetCursorStyle::BlinkingBar)?;
-                                            }
-                                        },
-                                        KeyCode::Char('n') | KeyCode::Char('N') => {
-                                            if let KeyModifiers::SHIFT = key.modifiers {
-                                                let file = self.open_files.remove(self.current_file_index);
-                                                self.current_file_index = if self.current_file_index == self.open_files.len() {
-                                                    0
-                                                } else {
-                                                    self.current_file_index + 1
-                                                };
-                                                self.open_files.insert(self.current_file_index, file);
-                                            }
-                                            else {
-                                                self.current_file_index = if self.current_file_index == self.open_files.len() - 1 {
-                                                    0
-                                                } else {
-                                                    self.current_file_index + 1
-                                                };
-                                                self.cursor.move_to(self.open_files[self.current_file_index].x, self.open_files[self.current_file_index].y, &mut self.renderer, &mut self.open_files[self.current_file_index])?;
-                                            }
-                                        }
-                                        KeyCode::Char('b') | KeyCode::Char('B') => {
-                                            if let KeyModifiers::SHIFT = key.modifiers {
-                                                let file = self.open_files.remove(self.current_file_index);
-                                                self.current_file_index = if self.current_file_index == 0 {
-                                                    self.open_files.len()
-                                                } else {
-                                                    self.current_file_index - 1
-                                                };
-                                                self.open_files.insert(self.current_file_index, file);
-                                            }
-                                            else {
-                                                self.current_file_index = if self.current_file_index == 0 {
-                                                    self.open_files.len() - 1
-                                                } else {
-                                                    self.current_file_index - 1
-                                                };
-                                                self.cursor.move_to(self.open_files[self.current_file_index].x, self.open_files[self.current_file_index].y, &mut self.renderer, &mut self.open_files[self.current_file_index])?;
-                                            }
-                                        },
-                                        KeyCode::Char('x') => {
-                                            self.open_files.remove(self.current_file_index);
-                                            self.current_file_index = self.current_file_index.saturating_sub(1);
-                                            if self.open_files.len() == 0 {
-                                                self.open_files.push(File::for_home());
-                                                self.tab = Tab::Home;
-                                            }
-                                        },
-                                        KeyCode::Char(':') => {
-                                            self.status_message.mode = status_message::Mode::Enabled;
-                                        },
-                                        directions @ (KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right | KeyCode::Char('w') | KeyCode::Char('a') | KeyCode::Char('s') | KeyCode::Char('d')) => {
-                                            self.cursor.move_cursor(directions, &mut self.renderer, &mut self.open_files[self.current_file_index])?;
-                                        },
-                                        KeyCode::Char(c) => {
-                                            self.status_message.quick_command.push(c);
-                                            match c {
-                                                'j' | 'r' => self.parse_quick_command()?,
-                                                // '%' => self.status_message.quick_command.clear(),
-                                                _ => {}
-                                            }
-                                        },
-                                        KeyCode::Esc => {
-                                            self.status_message.quick_command.clear();
-                                        },
-                                        _ => {
-                                            self.status_message.mode = status_message::Mode::Disabled;
-                                        }
-                                    }
-                                }
-                            } 
-                            else {
-                                match key.code {
-                                    KeyCode::Char(':') => {
-                                        self.status_message.mode = status_message::Mode::Enabled;
-                                    },
-                                    _ => {
-                                        self.cursor.move_cursor(key.code, &mut self.renderer, &mut self.open_files[self.current_file_index])?;
-                                        self.status_message.mode = status_message::Mode::Disabled;
-                                    }
-                                }
-                            }
-                        },
-                        _ => {}
-                    }
-                },
-                Event::Mouse(event) => {
-                    match event.kind {
-                        MouseEventKind::Down(button) => {
-                            if let MouseButton::Left = button {
-                                self.cursor.move_to(event.column as u16, event.row as u16, &mut self.renderer, &mut self.open_files[self.current_file_index])?;
-                            }
-                        }
-                        MouseEventKind::ScrollDown => {
-                            self.cursor.move_cursor(KeyCode::Down, &mut self.renderer, &mut self.open_files[self.current_file_index])?;
-                        }
-                        MouseEventKind::ScrollUp => {
-                            self.cursor.move_cursor(KeyCode::Up, &mut self.renderer, &mut self.open_files[self.current_file_index])?;
                         },
                         _ => {}
                     }
@@ -353,73 +152,71 @@ impl Window {
         Ok(())
     }
 
-    pub fn ui(&mut self) -> Result<()> {
+    pub fn parse_command(&mut self) -> Result<()> {
+        let args: Vec<&str> = self.command_palette.command.split_whitespace().collect();
+
+        match args[0].to_lowercase().as_str() {
+            "q" | "quit" => {
+                return Err(Error::new(ErrorKind::Other, "Quit").into());
+            },
+            "o" | "open" => {
+                if args.len() > 1 {
+                    if !(Path::new(&args[1]).exists() && Path::new(&args[1]).is_file()) {
+                        return Ok(()); // PLACEHOLDER
+                    }
+                    let file = File::new(args[1].to_string())?;
+                    self.files.push(file);
+                    self.file_index = self.files.len() - 1;
+                }
+            },
+            _ => {
+                
+            }
+        }
+        self.command_palette.command.clear();
+        Ok(())
+    }
+
+    pub fn render(&mut self) -> Result<()> {
         loop {
             self.parse_input()?;
-            execute!(self.renderer, cursor::Hide, cursor::DisableBlinking)?;
-            match self.tab {
-                Tab::Home => {
-                    home(self)?;
-                },
-                Tab::Editor => {
-                    editor::editor(self)?;
-                }
+            queue!(self.renderer, cursor::Hide, cursor::DisableBlinking)?;
+
+            if self.files.is_empty() {
+                let frame = self.home.render()?;
+                self.register(frame, false);
             }
-            if let Tab::Editor = self.tab {
-                if self.open_files[self.current_file_index].y == 0 || self.open_files[self.current_file_index].y == 1 {
-                    self.open_files[self.current_file_index].y = 2 
-                }
+            else {
+                let frame = self.files[self.file_index].render();
+                self.register(frame, false);
             }
 
-            self.render_status_message()?;
+            if self.file_explorer.enabled {
+                let frame = self.file_explorer.render();
+                self.register(frame, true);
+            }
+
+            if self.command_palette.enabled {
+                let frame = self.command_palette.render();
+                self.register(frame, false);
+                self.overlay = true;
+            }
+            
+            self.render_frames()?;
+
+            // if self.command_palette.enabled {
+            //     queue!(self.renderer, crossterm::cursor::SetCursorStyle::BlinkingBar)?;
+            //     queue!(self.renderer, cursor::MoveTo(self.command_palette.cursor.x, self.command_palette.cursor.y))?;
+            // }
+            // else if self.files.is_empty() {
+            //     queue!(self.renderer, cursor::MoveTo(self.home.cursor.x, self.home.cursor.y))?;
+            // }
+            // else {
+            //     queue!(self.renderer, cursor::MoveTo(self.files[self.file_index].cursor.x, self.files[self.file_index].cursor.y))?;
+            // }
 
             queue!(self.renderer, cursor::Show, cursor::EnableBlinking)?;
             self.renderer.flush()?;
         }
-    }
-    pub fn render_status_message(&mut self) -> Result<()> {
-        let current_file = &self.open_files[self.current_file_index];
-        let (terminal_x, terminal_y) = terminal::size()?;
-        let (x,y) = if let status_message::Mode::Enabled = self.status_message.mode { (1+self.status_message.command.len() as u16, terminal_y-1) } else { (current_file.x, current_file.y) };
-
-        let mode = match self.editor_mode {
-            editor::Mode::Insert => String::from("--insert mode--").red().to_string(),
-            editor::Mode::View => String::from("--view mode--").green().to_string(),
-            _ => String::new()
-        };
-
-        let top_right = match self.tab {
-            Tab::Home => String::from("Home "),
-            Tab::Editor => {
-                let (file_x, file_y) = (current_file.x+current_file.offset_x+1,current_file.y+current_file.offset_y-1);
-                format!("{} {}:{} {}", self.status_message.quick_command.clone().dark_red(), file_y, file_x, mode)
-            },
-            _ => String::new()
-        };
-
-        let top_left = match self.tab {
-            Tab::Editor => String::new(),
-            _ => String::new()
-        };
-
-        let bottom = match self.status_message.mode {
-            status_message::Mode::Enabled => {
-                self.cursor.movable = false;
-                format!(":{}", self.status_message.command)
-            },
-            status_message::Mode::Error => format!("Error: {}", self.status_message.error).red().to_string(),
-            status_message::Mode::Success => format!("{}", self.status_message.success).green().to_string(),
-            _ => String::new()
-        };
-
-        let status_bar = format!("{}{}{} \r\n", top_left, " ".repeat(terminal_x as usize-strip_ansi_escapes::strip(&top_right).unwrap().len()-strip_ansi_escapes::strip(&top_left).unwrap().len()-1), top_right); // theres a random -1 because of padding on the right for better view idfk
-        let status_message = format!("{}", bottom);
-
-        queue!(self.renderer, terminal::Clear(terminal::ClearType::CurrentLine))?;
-        queue!(self.renderer, Print(status_bar))?;
-        queue!(self.renderer, terminal::Clear(terminal::ClearType::CurrentLine))?;
-        queue!(self.renderer, Print(status_message))?;
-        queue!(self.renderer, cursor::MoveTo(x,y))?;
-        Ok(())
     }
 }
