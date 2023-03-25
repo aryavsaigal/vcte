@@ -64,7 +64,7 @@ impl Cursor {
     pub fn parse_direction(&mut self, direction: KeyCode) {
         match direction {
             KeyCode::Up | KeyCode::Char('w') => {
-                if self.y == 0 {
+                if self.y == self.y_min {
                     return self.y_offset = self.y_offset.saturating_sub(1);
                 }
                 self.move_to(self.x, self.y - 1);
@@ -73,6 +73,9 @@ impl Cursor {
                 self.move_to(self.x, self.y + 1);
             },
             KeyCode::Left | KeyCode::Char('a') => {
+                if self.x == self.x_min {
+                    return self.x_offset = self.x_offset.saturating_sub(1);
+                }
                 self.move_to(self.x - 1, self.y);
             },
             KeyCode::Right | KeyCode::Char('d') => {

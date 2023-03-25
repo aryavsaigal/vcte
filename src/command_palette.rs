@@ -25,7 +25,7 @@ impl CommandPalette {
         let command = format!("▏:{}▕", self.command);
         let command_len = command.graphemes(true).count();
         let start = if terminal_y / 8 > 1 { terminal_y / 8 } else { 2 };
-        let padding = ((terminal_x - command.len() as u16)/2 + 1) as usize;
+        let padding = ((terminal_x - command.len() as u16)/2) as usize;
 
         let border_colour = Info::new(Color::White, Color::Reset, vec![]);
         let mut command = ColourString::new(command, Some(Info::new(Color::White, Color::Reset, vec![])));

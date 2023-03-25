@@ -148,6 +148,16 @@ impl ColourString {
         output.render().trim_end().to_string()
     }
 
+    pub fn join(vector: Vec<ColourString>, separator: ColourString) -> ColourString {
+        let mut output = ColourString::new(String::new(), None);
+        output.push_colour_string(vector.first().unwrap_or(&ColourString::new("".to_string(), None)).clone());
+        for line in vector.iter().skip(1) {
+            output.push_colour_string(separator.clone());
+            output.push_colour_string(line.clone());
+        }
+        output
+    }
+
 }
 
 impl fmt::Display for ColourString {

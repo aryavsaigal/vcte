@@ -1,6 +1,5 @@
 use crate::colour_string::{ColourString, Info};
 use crate::cursor::Cursor;
-use crossterm::event::KeyCode;
 use crossterm::{Result, terminal};
 use crossterm::style::Color;
 use std::fs;
@@ -32,8 +31,9 @@ impl File {
         })
     }
 
-    pub fn save(&mut self) -> Result<()> {
-        fs::write(&self.path, self.lines.join("\n"))
+    pub fn save(&mut self) -> Result<ColourString> {
+        fs::write(&self.path, self.lines.join("\n"))?;
+        Ok(ColourString::new(format!("saved file to {}", self.path), Some(Info::new(Color::Green, Color::Reset, vec![]))))
     }
 
     pub fn insert_char(&mut self, c: char) {
@@ -113,7 +113,7 @@ impl File {
 
             let mut colour_line = ColourString::new(line_number.to_string(), Some(Info::new(Color::DarkGrey, Color::Reset, vec![])));
 
-            colour_line.insert(0, " ".repeat(4-line_number.to_string().len()), Some(Info::new(Color::Black, Color::Reset, vec![])));
+            colour_line.insert(0, " ".repeat(4-line_number.to_string().len()), None);
             colour_line.push_str(&format!(" {}", line), None);
 
             colour_line.truncate(terminal_x as usize);

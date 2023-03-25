@@ -1,25 +1,30 @@
-use std::{io::{Stdout, stdout, Write, ErrorKind, Error}, time::Duration, path::Path, fmt::format};
+use std::{io::{Stdout, stdout, Write, ErrorKind, Error}, time::Duration, path::Path};
 use crossterm::{
-    event::{poll, read, Event, KeyCode, KeyModifiers},
+    event::{poll, read, Event, KeyCode, KeyModifiers, MouseEventKind, MouseButton},
     Result, 
     queue,
     cursor, terminal, style::Color
 };
 
-use crate::{colour_string::{ColourString, Info}, editor::File};
+use crate::{colour_string::{ColourString, Info}, editor::File, tab::Tab};
 use crate::home::Home;
 use crate::command_palette::CommandPalette;
 use crate::file_explorer::FileExplorer;
 use crate::status_bar::StatusBar;
 
+pub enum PushDirection {
+    Left,
+    Up
+}
+
 pub struct Frame {
     pub content: Vec<ColourString>,
-    pub push: bool,
+    pub push: Option<PushDirection>,
     pub ignore_whitespace: bool
 }
 
 impl Frame {
-    pub fn new(content: Vec<ColourString>, push: bool, ignore_whitespace: bool) -> Self {
+    pub fn new(content: Vec<ColourString>, push: Option<PushDirection>, ignore_whitespace: bool) -> Self {
         Self {
             content,
             push,
@@ -35,6 +40,7 @@ pub struct Window {
     pub status_bar: StatusBar,
     pub files: Vec<File>,
     pub file_index: usize,
+    pub tab: Tab,
     pub frames: Vec<Frame>,
     pub home: Home,
     pub overlay: bool,
@@ -48,6 +54,7 @@ impl Window {
             files: Vec::new(),
             file_index: 0,
             home: Home::new(),
+            tab: Tab::new(),
             command_palette: CommandPalette::new(),
             file_explorer: FileExplorer::new(),
             status_bar: StatusBar::new(),
@@ -55,7 +62,7 @@ impl Window {
         }
     }
 
-    pub fn register(&mut self, frame: Vec<ColourString>, push: bool, ignore_whitespace: bool) {
+    pub fn register(&mut self, frame: Vec<ColourString>, push: Option<PushDirection>, ignore_whitespace: bool) {
         self.frames.push(Frame::new(frame, push, ignore_whitespace));
     }
 
@@ -77,11 +84,22 @@ impl Window {
                         char.colour = Info::new(Color::DarkGrey, Color::Reset, vec![]);
                     }
 
-                    if frame.push {
-                        final_frame[line_index].l_shift(char.content.clone(), Some(char.colour.clone()));
-                    } else {
-                        if char.content != " " || frame.ignore_whitespace {
-                            final_frame[line_index].replace_range(char_index, char_index+1, ColourString::new(char.content.clone(), Some(char.colour.clone())));
+                    match &frame.push {
+                        Some(direction) => {
+                            match direction {
+                                PushDirection::Left => {
+                                    final_frame[line_index].l_shift(char.content.clone(), Some(char.colour.clone()));
+                                },
+                                PushDirection::Up => {
+                                    final_frame.insert(0, frame.content[line_index].clone());
+                                    break;
+                                }
+                            }
+                        },
+                        None => {
+                            if char.content != " " || frame.ignore_whitespace {
+                                final_frame[line_index].replace_range(char_index, char_index+1, ColourString::new(char.content.clone(), Some(char.colour.clone())));
+                            }
                         }
                     }
 
@@ -89,7 +107,7 @@ impl Window {
                 }
             }
         }
-
+        final_frame.truncate(terminal_y as usize);
         queue!(self.renderer, cursor::MoveTo(0,0))?;
         write!(self.renderer, "{}", ColourString::render_vector(final_frame))?;
         self.overlay = false;
@@ -101,6 +119,7 @@ impl Window {
     pub fn parse_input(&mut self) -> Result<()> {
         if poll(Duration::from_millis(50))? {
             let (terminal_x, terminal_y) = terminal::size()?;
+            self.status_bar.command_output = None;
             match read()? {
                 Event::Key(key) => {
                     match key.modifiers {
@@ -150,33 +169,22 @@ impl Window {
                                         self.command_palette.enabled = true;
                                     },
                                     KeyCode::Char('c') => {
-                                        if self.file_explorer.enabled {
+                                        if self.file_explorer.enabled && !self.files.is_empty() {
                                             self.file_explorer.enabled = false;
-
-                                            if self.files.is_empty() {
-                                                self.home.cursor.set_min(0, 0);
-                                                self.home.cursor.x -= terminal_x / 5 + 1;
-                                            }
-                                            else {
-                                                for file in &mut self.files {
-                                                    file.cursor.set_min(5, 0);
+                                            
+                                            for file in &mut self.files {
+                                                    file.cursor.set_min(5, file.cursor.y_min);
                                                     file.cursor.x -= terminal_x / 5 + 1;
-                                                }
                                             }
                                         }
-                                        else {
+                                        else if !self.files.is_empty() {
                                             self.file_explorer.enabled = true;
 
-                                            if self.files.is_empty() {
-                                                self.home.cursor.x += terminal_x / 5 + 1;
-                                                self.home.cursor.set_min(terminal_x / 5 + 1, 0);
+                                            for file in &mut self.files {
+                                                file.cursor.x += terminal_x / 5 + 1;
+                                                file.cursor.set_min(terminal_x / 5 + 1 + file.cursor.x_min, file.cursor.y_min);
                                             }
-                                            else {
-                                                for file in &mut self.files {
-                                                    file.cursor.x += terminal_x / 5 + 1;
-                                                    file.cursor.set_min(terminal_x / 5 + 1, 0);
-                                                }
-                                            }
+
                                         }
                                     },
                                     KeyCode::Char('C') => {
@@ -187,6 +195,22 @@ impl Window {
                                             self.files[self.file_index].insert = true;
                                         }
                                     },
+                                    KeyCode::Char('n') => {
+                                        if !self.files.is_empty() {
+                                            self.file_index += 1;
+                                            self.file_index %= self.files.len();
+                                        }
+                                    }
+                                    KeyCode::Char('b') => {
+                                        if !self.files.is_empty() {
+                                            if self.file_index == 0 {
+                                                self.file_index = self.files.len() - 1;
+                                            }
+                                            else {
+                                                self.file_index -= 1;
+                                            }
+                                        }
+                                    }
                                     direction @ (KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right | KeyCode::Char('w') | KeyCode::Char('a') | KeyCode::Char('s') | KeyCode::Char('d')) => {
                                         if self.file_explorer.selected {
                                             self.file_explorer.cursor.parse_direction(direction);
@@ -205,6 +229,37 @@ impl Window {
                         _ => {}
                     }
                 },
+                Event::Mouse(event) => {
+                    match event.kind {
+                        MouseEventKind::Down(button) => {
+                            if let MouseButton::Left = button {
+                                if self.files.is_empty() {
+                                    self.home.cursor.move_to(event.column as u16, event.row as u16)
+                                }
+                                else {
+                                    self.files[self.file_index].cursor.move_to(event.column as u16, event.row as u16)
+                                }
+                            }
+                        },
+                        MouseEventKind::ScrollUp => {
+                            if self.files.is_empty() {
+                                self.home.cursor.parse_direction(KeyCode::Up);
+                            }
+                            else {
+                                self.files[self.file_index].cursor.parse_direction(KeyCode::Up);
+                            }
+                        },
+                        MouseEventKind::ScrollDown => {
+                            if self.files.is_empty() {
+                                self.home.cursor.parse_direction(KeyCode::Down);
+                            }
+                            else {
+                                self.files[self.file_index].cursor.parse_direction(KeyCode::Down);
+                            }
+                        },
+                        _ => {}
+                    }
+                },
                 _ => {}
             }
         };
@@ -213,7 +268,7 @@ impl Window {
 
     pub fn parse_command(&mut self) -> Result<()> {
         let args: Vec<&str> = self.command_palette.command.split_whitespace().collect();
-
+        let terminal_x = terminal::size()?.0;
         match args[0].to_lowercase().as_str() {
             "q" | "quit" => {
                 return Err(Error::new(ErrorKind::Other, "Quit").into());
@@ -221,20 +276,23 @@ impl Window {
             "o" | "open" => {
                 if args.len() > 1 {
                     if !(Path::new(&args[1]).exists() && Path::new(&args[1]).is_file()) {
-                        return Ok(()); // PLACEHOLDER
+                        self.status_bar.set_command_output(ColourString::new(format!("{}: No such file", args[1]), Some(Info::new(Color::Red, Color::Reset, vec![]))));
+                        self.command_palette.command.clear();
+                        return Ok(())
                     }
                     let mut file = File::new(args[1].to_string())?;
-                    file.cursor.set_min(5, 0);
-                    file.cursor.x = 5;
+                    file.cursor.set_min(5 + if self.file_explorer.enabled { terminal_x / 5 + 1 } else { 0 }, 1); // TO CHANGR
+                    file.cursor.x = file.cursor.x_min;
+                    file.cursor.y = file.cursor.y_min;
                     self.files.push(file);
                     self.file_index = self.files.len() - 1;
                 }
             },
             "s" | "save" => {
-                self.files[self.file_index].save()?;
+                self.status_bar.set_command_output(self.files[self.file_index].save()?);
             }
             _ => {
-                
+                self.status_bar.set_command_output(ColourString::new(format!("{}: Command not found", args[0]), Some(Info::new(Color::Red, Color::Reset, vec![]))));
             }
         }
         self.command_palette.command.clear();
@@ -243,28 +301,53 @@ impl Window {
 
     pub fn render(&mut self) -> Result<()> {
         loop {
+            let (terminal_x, terminal_y) = terminal::size()?;
+
             self.parse_input()?;
             queue!(self.renderer, cursor::Hide, cursor::DisableBlinking)?;
 
+            if !self.files.is_empty() {
+                let file = &self.files[self.file_index];
+
+                let mut message = if file.insert {
+                    ColourString::new(format!("insert "), Some(Info::new(Color::Red, Color::Reset, vec![])))
+                }
+                else {
+                    ColourString::new(format!("view "), Some(Info::new(Color::Green, Color::Reset, vec![])))
+                };
+                let end_message = format!("Ln {}, Col {}", file.cursor.y - file.cursor.y_min + file.cursor.y_offset + 1, file.cursor.x - file.cursor.x_min + file.cursor.x_offset + 1);
+
+                message.push_str(&format!("{} {}", file.name, format_size(file.lines.join("\n").len() as u64)), None);
+                message.push_str(&format!("{}", " ".repeat(terminal_x as usize - message.get_content().len()-end_message.len())), None);
+                message.push_str(&end_message, None);
+
+                self.status_bar.set_message(message);
+            }
+
             if self.files.is_empty() {
                 let frame = self.home.render()?;
-                self.register(frame, false, false);
+                self.register(frame, None, false);
             }
             else {
                 let frame = self.files[self.file_index].render();
-                self.register(frame, false, false);
+                self.register(frame, None, false);
             }
 
             if self.file_explorer.enabled {
-                let frame = self.file_explorer.render();
-                self.register(frame, true, false);
+                let frame = self.file_explorer.render(&self.files[self.file_index]);
+                self.register(frame, Some(PushDirection::Left), false);
+            }
+            
+            if !self.files.is_empty() {
+                let frame = self.tab.render(&self.files, self.file_index);
+                self.register(frame, Some(PushDirection::Up), false);
             }
 
-            self.register(self.status_bar.render(), false, true);
+            self.register(self.status_bar.render(), None, true);
 
             if self.command_palette.enabled {
                 let frame = self.command_palette.render();
-                self.register(frame, false, false);
+                self.register(frame, None, false);
                 self.overlay = true;
             }
             
@@ -281,25 +364,6 @@ impl Window {
             }
             else {
                 queue!(self.renderer, cursor::MoveTo(self.files[self.file_index].cursor.x, self.files[self.file_index].cursor.y))?;
-            }
-
-            if !self.files.is_empty() {
-                let file = &self.files[self.file_index];
-                let (terminal_x, terminal_y) = terminal::size()?;
-
-                let mut message = if file.insert {
-                    ColourString::new(format!("insert "), Some(Info::new(Color::Red, Color::Reset, vec![])))
-                }
-                else {
-                    ColourString::new(format!("view "), Some(Info::new(Color::Green, Color::Reset, vec![])))
-                };
-                let end_message = format!("Ln {}, Col {}", file.cursor.y - file.cursor.y_min + file.cursor.y_offset + 1, file.cursor.x - file.cursor.x_min + file.cursor.x_offset + 1);
-
-                message.push_str(&format!("{} {}", file.name, format_size(file.lines.join("\n").len() as u64)), None);
-                message.push_str(&format!("{}", " ".repeat(terminal_x as usize - message.get_content().len()-end_message.len())), None);
-                message.push_str(&end_message, None);
-
-                self.status_bar.set_message(message);
             }
 
             queue!(self.renderer, cursor::Show, cursor::EnableBlinking)?;
