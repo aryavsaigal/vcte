@@ -39,7 +39,7 @@ impl FileExplorer {
                     name.push('/');
                 }
                 name.truncate(max_x as usize);
-                frame[i].replace_range(0, name.len(), ColourString::new(name, Some(Info::new(Color::White, Color::Black, vec![]))));
+                frame[i].replace_range(0, name.len(), ColourString::new(name, Some(Info::new(Color::White, Color::Reset, vec![]))));
             }
         } // change
 
