@@ -140,12 +140,12 @@ impl ColourString {
     }
 
     pub fn render_vector(vector: Vec<ColourString>) -> String {
-        let mut output = ColourString::new("".to_string(), None);
+        let mut output = ColourString::new(String::new(), None);
         for mut line in vector {
             output.push_colour_string(line.clone());
             line.push_str("\r\n", Some(line.content.last().unwrap_or(&Char { content: String::new(), colour: Info::new(Color::White, Color::Reset, vec![]) }).colour.clone()));
         }
-        output.render().trim().to_string()
+        output.render().trim_end().to_string()
     }
 
 }

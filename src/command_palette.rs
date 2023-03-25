@@ -32,7 +32,7 @@ impl CommandPalette {
 
         command.set_colour(border_colour.clone(), 0, 1);
         command.set_colour(border_colour.clone(), command_len-1, command_len);
-        command.replace_char(" ".to_string(), "█".to_string(), Some(Info::new(Color::Black, Color::Reset, vec![])));
+        // command.replace_char(" ".to_string(), "█".to_string(), Some(Info::new(Color::Black, Color::Reset, vec![])));
 
         frame[(start-1) as usize].replace_range(padding, terminal_x as usize, ColourString::new("▁".repeat(command_len), Some(border_colour.clone())));
         frame[start as usize].replace_range(padding, terminal_x as usize, command);

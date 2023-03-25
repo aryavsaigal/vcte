@@ -5,6 +5,7 @@ pub(crate) mod command_palette;
 pub(crate) mod file_explorer;
 pub(crate) mod cursor;
 pub(crate) mod editor;
+pub(crate) mod status_bar;
 
 use crossterm::{
     terminal::{ disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen}, 
