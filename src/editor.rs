@@ -37,11 +37,11 @@ impl File {
     }
 
     pub fn insert_char(&mut self, c: char) {
-        while self.lines.len() <= (self.cursor.y + self.cursor.y_offset) as usize {
+        while self.lines.len() <= (self.cursor.y + self.cursor.y_offset - self.cursor.y_min) as usize {
             self.lines.push(String::new());
         }
 
-        let line = self.lines.get_mut((self.cursor.y + self.cursor.y_offset) as usize).unwrap();
+        let line = self.lines.get_mut((self.cursor.y + self.cursor.y_offset - self.cursor.y_min) as usize).unwrap();
         let mut graphemes = line.graphemes(true).collect::<Vec<&str>>();
         
         let x = self.cursor.x + self.cursor.x_offset - self.cursor.x_min;
@@ -58,13 +58,15 @@ impl File {
     }
 
     pub fn backspace(&mut self) {
-        let y = self.cursor.y + self.cursor.y_offset;
+        let y = self.cursor.y + self.cursor.y_offset - self.cursor.y_min;
 
         if self.cursor.x > self.cursor.x_min {
             let line = self.lines.get_mut(y as usize).unwrap();
             let mut graphemes = line.graphemes(true).collect::<Vec<&str>>();
 
-            graphemes.remove((self.cursor.x + self.cursor.x_offset - self.cursor.x_min - 1) as usize);
+            if graphemes.len() > (self.cursor.x + self.cursor.x_offset - self.cursor.x_min - 1) as usize  {
+                graphemes.remove((self.cursor.x + self.cursor.x_offset - self.cursor.x_min - 1) as usize);
+            }
             *line = graphemes.join("");
 
             self.cursor.x -= 1;
@@ -83,7 +85,7 @@ impl File {
     }
 
     pub fn enter(&mut self) {
-        let y = self.cursor.y + self.cursor.y_offset;
+        let y = self.cursor.y + self.cursor.y_offset - self.cursor.y_min;
         let line = self.lines.get_mut(y as usize).unwrap();
         let mut graphemes = line.graphemes(true).collect::<Vec<&str>>();
 
@@ -111,11 +113,10 @@ impl File {
             let mut line = self.lines.get((i + self.cursor.y_offset)as usize).unwrap_or(&default).to_string();
             line = line.graphemes(true).skip(self.cursor.x_offset as usize).collect();
 
-            let mut colour_line = ColourString::new(line_number.to_string(), Some(Info::new(Color::DarkGrey, Color::Reset, vec![])));
+            let mut colour_line = ColourString::new(if line_number > self.lines.len() as u16 { "~".to_string() } else { line_number.to_string() }, Some(Info::new(Color::DarkGrey, Color::Reset, vec![])));
+            colour_line.insert(0, " ".repeat(if line_number > self.lines.len() as u16 { 3 } else { 4-line_number.to_string().len() }), None);
 
-            colour_line.insert(0, " ".repeat(4-line_number.to_string().len()), None);
             colour_line.push_str(&format!(" {}", line), None);
-
             colour_line.truncate(terminal_x as usize);
 
             frame[i as usize].replace_range(0, terminal_x as usize, colour_line);

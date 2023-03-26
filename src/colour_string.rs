@@ -65,6 +65,14 @@ impl ColourString {
     //     self.content.push(Char { content, colour: colour.unwrap_or(Info::new(Color::White, Color::Reset, vec![])) });
     // }
 
+    pub fn set_colour_pattern(&mut self, pattern: String, colour: Info) {
+        let indices = self.content.iter_mut().map(|x| x.content.to_string()).collect::<Vec<String>>().join("");
+        let indices = indices.match_indices(&pattern).collect::<Vec<_>>();
+        for i in indices {
+            self.set_colour(colour.clone(), i.0, i.0 + pattern.len());
+        }
+    }
+
     pub fn replace_char(&mut self, pattern: String, replacement: String, colour: Option<Info>) {
         let mut new_content = Vec::new();
         let colour = colour.unwrap_or(Info::new(Color::White, Color::Reset, vec![]));

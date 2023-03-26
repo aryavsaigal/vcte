@@ -171,7 +171,8 @@ impl Window {
                                     KeyCode::Char('c') => {
                                         if self.file_explorer.enabled && !self.files.is_empty() {
                                             self.file_explorer.enabled = false;
-                                            
+                                            self.file_explorer.selected = false;
+
                                             for file in &mut self.files {
                                                     file.cursor.set_min(5, file.cursor.y_min);
                                                     file.cursor.x -= terminal_x / 5 + 1;
@@ -188,7 +189,9 @@ impl Window {
                                         }
                                     },
                                     KeyCode::Char('C') => {
-                                        self.file_explorer.selected = !self.file_explorer.selected;
+                                        if self.file_explorer.enabled {
+                                            self.file_explorer.selected = !self.file_explorer.selected;
+                                        }
                                     }
                                     KeyCode::Char('i') => {
                                         if !self.files.is_empty() {
@@ -209,6 +212,28 @@ impl Window {
                                             else {
                                                 self.file_index -= 1;
                                             }
+                                        }
+                                    },
+                                    KeyCode::Char('x') => {
+                                        if !self.files.is_empty() {
+                                            self.files.remove(self.file_index);
+
+                                            self.file_index = self.file_index.saturating_sub(1);
+                                        }
+                                    },
+                                    KeyCode::Enter => {
+                                        if self.file_explorer.selected {
+                                            match self.file_explorer.parse_input() {
+                                                Some(path) => {
+                                                    let mut file = File::new(path)?;
+                                                    file.cursor.set_min(5 + if self.file_explorer.enabled { terminal_x / 5 + 1 } else { 0 }, 1); // TO CHANGR
+                                                    file.cursor.x = file.cursor.x_min;
+                                                    file.cursor.y = file.cursor.y_min;
+                                                    self.files.push(file);
+                                                    self.file_index = self.files.len() - 1;
+                                                },
+                                                None => ()
+                                            };
                                         }
                                     }
                                     direction @ (KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right | KeyCode::Char('w') | KeyCode::Char('a') | KeyCode::Char('s') | KeyCode::Char('d')) => {
@@ -233,7 +258,21 @@ impl Window {
                     match event.kind {
                         MouseEventKind::Down(button) => {
                             if let MouseButton::Left = button {
-                                if self.files.is_empty() {
+                                if self.file_explorer.selected {
+                                    self.file_explorer.cursor.move_to(event.column as u16, event.row as u16);
+                                    match self.file_explorer.parse_input() {
+                                        Some(path) => {
+                                            let mut file = File::new(path)?;
+                                            file.cursor.set_min(5 + if self.file_explorer.enabled { terminal_x / 5 + 1 } else { 0 }, 1); // TO CHANGR
+                                            file.cursor.x = file.cursor.x_min;
+                                            file.cursor.y = file.cursor.y_min;
+                                            self.files.push(file);
+                                            self.file_index = self.files.len() - 1;
+                                        },
+                                        None => ()
+                                    };
+                                }
+                                else if self.files.is_empty() {
                                     self.home.cursor.move_to(event.column as u16, event.row as u16)
                                 }
                                 else {

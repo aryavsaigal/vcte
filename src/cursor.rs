@@ -43,18 +43,18 @@ impl Cursor {
 
     pub fn move_to(&mut self, mut x: u16, mut y: u16) {
         if x > self.x_max {
-            self.x_offset += 1;
+            self.x_offset += x-self.x_max;
             x = self.x_max;
         } else if x < self.x_min {
-            self.x_offset = self.x_offset.saturating_sub(1);
+            self.x_offset = self.x_offset.saturating_sub(x-self.x_min);
             x = self.x_min;
         }
         
         if y > self.y_max {
-            self.y_offset += 1;
+            self.y_offset += y-self.y_max;
             y = self.y_max;
         } else if y < self.y_min {
-            self.y = self.y_offset.saturating_sub(1);
+            self.y = self.y_offset.saturating_sub(y-self.y_min);
             y = self.y_min; 
         }
 
