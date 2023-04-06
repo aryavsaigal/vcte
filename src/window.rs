@@ -160,6 +160,9 @@ impl Window {
                                     KeyCode::Esc => {
                                         self.files[self.file_index].insert = false;
                                     },
+                                    direction @ (KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right) => {
+                                        self.files[self.file_index].cursor.parse_direction(direction);
+                                    },
                                     _ => {}
                                 }
                             }

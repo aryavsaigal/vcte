@@ -60,6 +60,12 @@ impl ColourString {
         self.content.insert(0, Char { content, colour: colour.unwrap_or(Info::new(Color::White, Color::Reset, vec![])) });
     }
 
+    pub fn skip(&mut self, n: usize) -> ColourString {
+        ColourString {
+            content: self.content.split_at(n).1.to_vec(),
+        }
+    }
+
     // pub fn r_shift(&mut self, content: String, colour: Option<Info>) {
     //     self.content.remove(0);
     //     self.content.push(Char { content, colour: colour.unwrap_or(Info::new(Color::White, Color::Reset, vec![])) });
@@ -154,6 +160,33 @@ impl ColourString {
             line.push_str("\r\n", Some(line.content.last().unwrap_or(&Char { content: String::new(), colour: Info::new(Color::White, Color::Reset, vec![]) }).colour.clone()));
         }
         output.render().trim_end().to_string()
+    }
+
+    pub fn parse_ansi_string(string: String) -> ColourString {
+        let mut output = ColourString::new(String::new(), None);
+        let mut current_colour = Info::new(Color::White, Color::Reset, vec![]);
+        let mut escape_code_pos: Option<usize> = None;
+
+        for (i, c) in string.char_indices() {
+            if c == '\x1b' {
+                escape_code_pos = Some(i);
+            }
+            else if escape_code_pos.is_some() {
+                if c == 'm' {
+                    let sequence = &string[escape_code_pos.unwrap()..i + 1];
+                    escape_code_pos = None;
+                    let mut sequence = sequence.split(';').skip(2).collect::<Vec<&str>>();
+                    let r = sequence[0].parse().unwrap_or(0);
+                    let g = sequence[1].parse().unwrap_or(0);
+                    let b = sequence[2].replace("m", "").parse().unwrap_or(0);
+                    current_colour = Info::new(Color::Rgb { r, g, b }, Color::Reset, vec![]);
+                }
+            }
+            else {
+                output.push_str(&c.to_string(), Some(current_colour.clone()));
+            }
+        }
+        output
     }
 
     pub fn join(vector: Vec<ColourString>, separator: ColourString) -> ColourString {

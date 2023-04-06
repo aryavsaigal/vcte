@@ -28,9 +28,7 @@ vcte is still in beta, you can try it out by
 
 ## Screenshots
 
-![App Screenshot](https://i.imgur.com/4DQXrLg.png)
-![App Screenshot](https://i.imgur.com/1GxhEZQ.png)
-
+![App Screenshot](https://i.imgur.com/b0mMcnk.png)
 
 ## Documentation
 ```
