@@ -7,6 +7,7 @@ pub(crate) mod cursor;
 pub(crate) mod editor;
 pub(crate) mod status_bar;
 pub(crate) mod tab;
+pub(crate) mod syntax_highlighter;
 
 use crossterm::{
     terminal::{ disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen}, 

@@ -54,7 +54,7 @@ impl Cursor {
             self.y_offset += y-self.y_max;
             y = self.y_max;
         } else if y < self.y_min {
-            self.y = self.y_offset.saturating_sub(y-self.y_min);
+            self.y = self.y_offset.saturating_sub(y.saturating_sub(self.y_min));
             y = self.y_min; 
         }
 

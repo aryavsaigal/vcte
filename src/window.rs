@@ -201,6 +201,11 @@ impl Window {
                                             self.files[self.file_index].insert = true;
                                         }
                                     },
+                                    KeyCode::Char('r') => {
+                                        if !self.files.is_empty() {
+                                            self.files[self.file_index].refresh_highlight();
+                                        }
+                                    }
                                     KeyCode::Char('n') => {
                                         if !self.files.is_empty() {
                                             self.file_index += 1;

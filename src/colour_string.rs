@@ -93,6 +93,17 @@ impl ColourString {
         self.content = new_content;
     }
 
+    pub fn replace(&mut self, pattern: String, replacement: String, colour: Option<Info>) {
+        let colour = colour.unwrap_or(Info::new(Color::White, Color::Reset, vec![]));
+        let indices = self.content.iter_mut().map(|x| x.content.to_string()).collect::<Vec<String>>().join("");
+        let indices = indices.match_indices(&pattern).collect::<Vec<_>>();
+
+        for (i, p) in indices {
+            self.content.splice(i..i + pattern.len(), replacement.graphemes(true).map(|x| Char { content: x.to_string(), colour: colour.clone() }).collect::<Vec<Char>>());
+        }
+
+    }
+
     pub fn push_colour_string(&mut self, other: ColourString) {
         self.content.extend(other.content);
     }
@@ -108,7 +119,7 @@ impl ColourString {
     }
 
     pub fn set_colour(&mut self, colour: Info, start: usize, end: usize) {
-        for i in start..end {
+        for i in start..end.clamp(0, self.content.len()) {
             self.content[i].colour = colour.clone();
         }
     }
