@@ -14,7 +14,7 @@ impl Tab {
         let mut tabs = Vec::new(); 
 
         for (i, file) in files.iter().enumerate() {
-            let tab = ColourString::new(format!(" {} ", file.name.clone()), if i == file_index { Some(Info::new(Color::White, Color::DarkGrey, vec![])) } else { Some(Info::new(Color::White, Color::Reset, vec![])) });
+            let tab = ColourString::new(format!(" {}{} ", file.name.clone(), if file.modified { " ●" } else { "" }), if i == file_index { Some(Info::new(Color::White, Color::DarkGrey, vec![])) } else { Some(Info::new(Color::White, Color::Reset, vec![])) });
             tabs.push(tab);
         }
 

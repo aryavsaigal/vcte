@@ -5,6 +5,8 @@ use crossterm::{
     queue,
     cursor, terminal, style::Color
 };
+use chrono::{self, Timelike};
+use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{colour_string::{ColourString, Info}, editor::File, tab::Tab};
 use crate::home::Home;
@@ -213,7 +215,22 @@ impl Window {
                                         if !self.files.is_empty() {
                                             self.files[self.file_index].refresh_highlight();
                                         }
-                                    }
+                                    },
+                                    KeyCode::Char('l') => {
+                                        if !self.files.is_empty() {
+                                            let file = &mut self.files[self.file_index];
+                                            let end = (file.lines[(file.cursor.y + file.cursor.y_offset - file.cursor.y_min) as usize].graphemes(true).count() as u16 + file.cursor.x_min);
+                                            file.cursor.move_to(end, file.cursor.y);
+                                        }
+                                    },
+                                    KeyCode::Char('k') => {
+                                        if !self.files.is_empty() {
+                                            let file = &mut self.files[self.file_index];
+                                            let first = file.lines[(file.cursor.y + file.cursor.y_offset - file.cursor.y_min) as usize].graphemes(true).position(|c| c != " ").unwrap_or(0) as u16 + file.cursor.x_min;
+                                            file.cursor.x_offset = first.saturating_sub(terminal_x);
+                                            file.cursor.move_to(first, file.cursor.y);
+                                        }
+                                    },
                                     KeyCode::Char('n') => {
                                         if !self.files.is_empty() {
                                             self.file_index += 1;
@@ -362,6 +379,7 @@ impl Window {
             queue!(self.renderer, cursor::Hide, cursor::DisableBlinking)?;
 
             if !self.files.is_empty() {
+                let dt = chrono::Local::now();
                 let file = &self.files[self.file_index];
 
                 let mut message = if file.insert {
@@ -370,7 +388,7 @@ impl Window {
                 else {
                     ColourString::new(format!("view "), Some(Info::new(Color::Green, Color::Reset, vec![])))
                 };
-                let end_message = format!("Ln {}, Col {}", file.cursor.y - file.cursor.y_min + file.cursor.y_offset + 1, file.cursor.x - file.cursor.x_min + file.cursor.x_offset + 1);
+                let end_message = format!("{} Ln {}, Col {}", dt.format("%H:%M:%S").to_string(), file.cursor.y - file.cursor.y_min + file.cursor.y_offset + 1, file.cursor.x - file.cursor.x_min + file.cursor.x_offset + 1);
 
                 message.push_str(&format!("{} {}", file.name, format_size(file.lines.join("\n").len() as u64)), None);
                 message.push_str(&format!("{}", " ".repeat(terminal_x as usize - message.get_content().len()-end_message.len())), None);

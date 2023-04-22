@@ -62,7 +62,7 @@ impl ColourString {
 
     pub fn skip(&mut self, n: usize) -> ColourString {
         ColourString {
-            content: self.content.split_at(n).1.to_vec(),
+            content: self.content.split_at(n.clamp(0, self.content.len())).1.to_vec(),
         }
     }
 
