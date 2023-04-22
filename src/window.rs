@@ -79,9 +79,17 @@ impl Window {
                     continue;
                 }
 
-                for (char_index, char) in frame.content[line_index].get_content().clone().iter_mut().enumerate().rev() {
-                    if self.overlay && !is_last && char.content != "█" {
-                        char.colour = Info::new(Color::DarkGrey, Color::Reset, vec![]);
+                let mut line = frame.content[line_index].get_content().clone();
+                line.truncate(terminal_x as usize);
+
+                for (char_index, char) in line.iter_mut().enumerate().rev() {
+                    if self.overlay && !is_last {
+                        if char.content == "█" {
+                            char.colour = Info::new(Color::Black, Color::Reset, vec![]);
+                        }
+                        else {
+                            char.colour = Info::new(Color::DarkGrey, Color::Reset, vec![]);
+                        }
                     }
 
                     match &frame.push {

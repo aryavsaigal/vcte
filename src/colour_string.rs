@@ -74,8 +74,9 @@ impl ColourString {
     pub fn set_colour_pattern(&mut self, pattern: String, colour: Info) {
         let indices = self.content.iter_mut().map(|x| x.content.to_string()).collect::<Vec<String>>().join("");
         let indices = indices.match_indices(&pattern).collect::<Vec<_>>();
+
         for i in indices {
-            self.set_colour(colour.clone(), i.0, i.0 + pattern.len());
+            self.set_colour(colour.clone(), i.0, i.0 + pattern.graphemes(true).count());
         }
     }
 
@@ -95,13 +96,56 @@ impl ColourString {
 
     pub fn replace(&mut self, pattern: String, replacement: String, colour: Option<Info>) {
         let colour = colour.unwrap_or(Info::new(Color::White, Color::Reset, vec![]));
-        let indices = self.content.iter_mut().map(|x| x.content.to_string()).collect::<Vec<String>>().join("");
-        let indices = indices.match_indices(&pattern).collect::<Vec<_>>();
-
-        for (i, p) in indices {
-            self.content.splice(i..i + pattern.len(), replacement.graphemes(true).map(|x| Char { content: x.to_string(), colour: colour.clone() }).collect::<Vec<Char>>());
+        let pattern = pattern.graphemes(true).collect::<Vec<&str>>();
+        let mut indices = vec![];
+        let mut start: Option<usize> = None;
+        for (i, c) in self.content.iter().enumerate() {
+            if let None = start {
+                if c.content == pattern[0 as usize] {
+                    start = Some(i);
+                    if pattern.len() == 1 {
+                        indices.push(i);
+                        start = None;
+                    }
+                }
+            }
+            else if let Some(s) = start {
+                if i-s >= pattern.len()-1 {
+                    indices.push(s);
+                    if c.content == pattern[0 as usize] {
+                        start = Some(i);
+                        if pattern.len() == 1 {
+                            indices.push(i);
+                            start = None;
+                        }
+                    }
+                    else {
+                        start = None;
+                    }
+                }
+                else if c.content != pattern[i-s] {
+                    start = None;
+                }
+            }
         }
 
+        for i in indices {
+            self.content.splice(i..((i + pattern.join("").graphemes(true).count()) as usize).clamp(0, self.content.len()), replacement.graphemes(true).map(|x| Char { content: x.to_string(), colour: colour.clone() }).collect::<Vec<Char>>());
+        }
+
+    }
+
+    pub fn pad(&mut self, len: usize, content: String, colour: Option<Info>) {
+        let colour = colour.unwrap_or(Info::new(Color::White, Color::Reset, vec![]));
+        while self.content.len() < len {
+            self.content.push(Char { content: content.clone(), colour: colour.clone() });
+        }
+    }
+
+    pub fn set_background(&mut self, colour: Color) {
+        for i in 0..self.content.len() {
+            self.content[i].colour.background = colour;
+        }
     }
 
     pub fn push_colour_string(&mut self, other: ColourString) {

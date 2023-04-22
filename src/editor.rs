@@ -97,7 +97,7 @@ impl File {
             let prev_line = self.lines.get_mut(y.saturating_sub(1) as usize).unwrap();
 
             self.cursor.y -= 1;
-            self.cursor.x = prev_line.len() as u16 + self.cursor.x_min;
+            self.cursor.x = prev_line.graphemes(true).count() as u16 + self.cursor.x_min;
 
             prev_line.push_str(&line);
             self.highlighted_lines[y as usize - 1] = self.syntax_highlighter.highlight(prev_line.to_string());
@@ -142,7 +142,11 @@ impl File {
             line = line.skip(self.cursor.x_offset as usize);
             line.insert(0, " ".to_string(), None);
 
-            let mut colour_line = ColourString::new(if line_number > self.lines.len() as u16 { "~".to_string() } else { line_number.to_string() }, Some(Info::new(Color::DarkGrey, Color::Reset, vec![])));
+            let mut colour_line = ColourString::new(if line_number > self.lines.len() as u16 { "~".to_string() } else { line_number.to_string() }, Some(Info::new(Color::Rgb {
+                r: 248, 
+                g: 248, 
+                b: 242
+            }, Color::Reset, vec![])));
             colour_line.insert(0, " ".repeat(if line_number > self.lines.len() as u16 { 3 } else { 4-line_number.to_string().len() }), None);
             
             colour_line.push_colour_string(line);
@@ -150,6 +154,22 @@ impl File {
 
             frame[i as usize].replace_range(0, terminal_x as usize, colour_line);
             line_number += 1;
+        }
+        
+        for f in frame.iter_mut() {
+            f.pad(terminal_x as usize, " ".to_string(), None);
+            
+            f.replace(" ".to_string(), "█".to_string(), Some(Info::new(Color::Rgb {
+                r: 40,
+                g: 42,
+                b: 54,
+            }, Color::Reset, vec![])));
+
+            f.set_background(Color::Rgb {
+                r: 40,
+                g: 42,
+                b: 54,
+            })
         }
         frame
     }
