@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use crossterm::style::Color;
-use rand::{self, Rng, seq::SliceRandom};
-use crate::colour_string::{ColourString, Info};
+use rand::{self, seq::SliceRandom};
+use crate::colour_string::{ColourString, Info, Char};
 
 pub struct SyntaxHighlighter {
     pub colour_key: HashMap<String, Color>,
@@ -23,8 +23,22 @@ impl SyntaxHighlighter {
         for line in lines {
             for word in HashSet::<&str>::from_iter(line.split(&[' ', '.', ':'])) {
                 self.colour_key.entry(word.trim().to_string()).or_insert_with(|| {
-                    let mut rng = rand::thread_rng();
-                    *[rgb(248, 248, 242), rgb(139, 233, 253), rgb(80, 250, 123),rgb(255, 184, 108),rgb(255, 121, 198),rgb(189, 147, 249),rgb(255, 85, 85),rgb(241, 250, 140)].choose(&mut rng).unwrap()
+                    if word.contains("()") {
+                        Color::AnsiValue(120)
+                    }
+                    else if word.contains(|c: char| c.is_numeric()) {
+                        Color::AnsiValue(222)
+                    }
+                    else if ["(", ")", "{", "}", "[", "]"].contains(&word) {
+                        Color::AnsiValue(103)
+                    }
+                    else if ["+", "-", "*", "/", "%", "=", ">", "<", "!"].iter().any(|&c| word.contains(c)) {
+                        Color::AnsiValue(212)
+                    }
+                    else {
+                        let mut rng = rand::thread_rng();
+                        *[rgb(248, 248, 242), rgb(139, 233, 253), rgb(80, 250, 123),rgb(255, 184, 108),rgb(255, 121, 198),rgb(189, 147, 249),rgb(255, 85, 85),rgb(241, 250, 140)].choose(&mut rng).unwrap()
+                    }
                 });
             }
         }
@@ -45,6 +59,28 @@ impl SyntaxHighlighter {
                 highlighted_line.set_colour_pattern(word.to_string(), Info::new(self.colour_key.get(word.trim()).unwrap().clone(), Color::Reset, vec![]));
             }
         }
+        let mut start = None;
+        let mut index = 0;
+
+        let mut indices = Vec::new();
+
+        for char in highlighted_line.get_content() {
+            if char.content == "\"" {
+                if start.is_none() {
+                    start = Some(index);
+                }
+                else {
+                    indices.push((start.unwrap(), index+1));
+                    start = None;
+                }
+            }
+            index += 1;
+        }
+
+        for (start, end) in indices {
+            highlighted_line.set_colour(Info::new(Color::AnsiValue(229), Color::Reset, vec![]), start, end)
+        }
+
         highlighted_line
     }
 

@@ -23,13 +23,13 @@ impl Info {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Char {
     pub content: String,
     pub colour: Info,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ColourString {
     content: Vec<Char>,
 }
@@ -230,7 +230,7 @@ impl ColourString {
                 if c == 'm' {
                     let sequence = &string[escape_code_pos.unwrap()..i + 1];
                     escape_code_pos = None;
-                    let mut sequence = sequence.split(';').skip(2).collect::<Vec<&str>>();
+                    let sequence = sequence.split(';').skip(2).collect::<Vec<&str>>();
                     let r = sequence[0].parse().unwrap_or(0);
                     let g = sequence[1].parse().unwrap_or(0);
                     let b = sequence[2].replace("m", "").parse().unwrap_or(0);

@@ -44,6 +44,7 @@ impl File {
     }
 
     pub fn refresh_highlight(&mut self) {
+        ("refresh");
         self.syntax_highlighter.init(self.lines.clone());
         self.highlighted_lines = self.lines.iter().map(|line| {
             self.syntax_highlighter.highlight(line.to_string())
@@ -56,8 +57,13 @@ impl File {
     }
 
     pub fn insert_char(&mut self, c: char) {
+        ("insert");
         while self.lines.len() <= (self.cursor.y + self.cursor.y_offset - self.cursor.y_min) as usize {
             self.lines.push(String::new());
+        }
+
+        while self.highlighted_lines.len() <= (self.cursor.y + self.cursor.y_offset - self.cursor.y_min) as usize {
+            self.highlighted_lines.push(ColourString::new(String::new(), None));
         }
 
         let line = self.lines.get_mut((self.cursor.y + self.cursor.y_offset - self.cursor.y_min) as usize).unwrap();
@@ -73,11 +79,13 @@ impl File {
         graphemes.insert((x) as usize, c.as_str());
         *line = graphemes.join("");
         self.cursor.x += 1;
+
         self.highlighted_lines[(self.cursor.y + self.cursor.y_offset - self.cursor.y_min) as usize] = self.syntax_highlighter.highlight(line.to_string());
         self.modified = true;
     }
 
     pub fn backspace(&mut self) {
+        ("backspace");
         let y = self.cursor.y + self.cursor.y_offset - self.cursor.y_min;
 
         if self.cursor.x > self.cursor.x_min {
@@ -107,6 +115,7 @@ impl File {
     }
 
     pub fn enter(&mut self) {
+        ("enter");
         let y = self.cursor.y + self.cursor.y_offset - self.cursor.y_min;
         let line = self.lines.get_mut(y as usize).unwrap();
         let mut graphemes = line.graphemes(true).collect::<Vec<&str>>();
